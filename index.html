@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07130f" />
+  <meta name="description" content="Private Sunday football match board for friends." />
+  <title>Sunday League — Friends Match Board</title>
+  <style>
+    :root {
+      --ink: #07130f;
+      --ink-2: #10251c;
+      --surface: #f5f4ec;
+      --card: #ffffff;
+      --lime: #caff35;
+      --green: #186847;
+      --blue: #225fcd;
+      --red: #df5144;
+      --orange: #f0a436;
+      --muted: #718078;
+      --line: rgba(7, 19, 15, .10);
+      --shadow: 0 16px 38px rgba(7, 19, 15, .11);
+      --radius: 22px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background: #dfe3dc;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    img { display: block; max-width: 100%; }
+
+    .app {
+      width: min(100%, 480px);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding-bottom: calc(94px + var(--safe-bottom));
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: 0 0 70px rgba(7,19,15,.15);
+    }
+
+    .top {
+      position: relative;
+      padding: calc(18px + env(safe-area-inset-top, 0px)) 18px 112px;
+      overflow: hidden;
+      color: #fff;
+      background:
+        radial-gradient(circle at 88% 6%, rgba(202,255,53,.25), transparent 25%),
+        linear-gradient(150deg, #07130f 0%, #123e2c 100%);
+    }
+
+    .top::before, .top::after {
+      content: "";
+      position: absolute;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 50%;
+      animation: orbit 13s linear infinite;
+    }
+
+    .top::before { width: 230px; height: 230px; right: -110px; top: -100px; }
+    .top::after { width: 130px; height: 130px; right: -38px; top: -35px; animation-direction: reverse; }
+
+    @keyframes orbit { to { transform: rotate(360deg); } }
+
+    .topbar {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+    }
+
+    .mark {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      color: var(--ink);
+      background: var(--lime);
+      font-size: 1.35rem;
+      transform: rotate(-4deg);
+      box-shadow: 0 8px 22px rgba(202,255,53,.18);
+    }
+
+    .brand small {
+      display: block;
+      margin-top: 2px;
+      color: rgba(255,255,255,.48);
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      color: #fff;
+      background: rgba(255,255,255,.08);
+    }
+
+    .hero-copy {
+      position: relative;
+      z-index: 2;
+      margin-top: 32px;
+    }
+
+    .private-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      color: var(--lime);
+      background: rgba(255,255,255,.06);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 340px;
+      margin: 17px 0 10px;
+      font-size: clamp(2.55rem, 11vw, 4rem);
+      line-height: .94;
+      letter-spacing: -.055em;
+    }
+
+    .hero-copy p {
+      max-width: 335px;
+      margin-bottom: 0;
+      color: rgba(255,255,255,.58);
+      font-size: .9rem;
+      line-height: 1.55;
+    }
+
+    main {
+      position: relative;
+      z-index: 3;
+      margin-top: -82px;
+      padding: 0 14px;
+    }
+
+    .screen { display: none; animation: screenIn .35s ease both; }
+    .screen.active { display: block; }
+    @keyframes screenIn {
+      from { opacity: 0; transform: translateY(9px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .match-card {
+      padding: 18px;
+      border-radius: 26px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+
+    .match-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .overline {
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .match-title {
+      margin: 5px 0 0;
+      font-size: 1.38rem;
+      letter-spacing: -.035em;
+    }
+
+    .status {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: #1d4c2c;
+      background: #e9f8d0;
+      font-size: .68rem;
+      font-weight: 800;
+    }
+
+    .event-details {
+      margin-top: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .detail {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fafbf7;
+      font-size: .82rem;
+      font-weight: 700;
+    }
+
+    .detail-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: #eef1e7;
+    }
+
+    .countdown {
+      margin-top: 13px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+    }
+
+    .time {
+      padding: 10px 4px 9px;
+      border-radius: 14px;
+      color: #fff;
+      background: var(--ink);
+      text-align: center;
+    }
+
+    .time strong {
+      display: block;
+      color: var(--lime);
+      font-size: 1.15rem;
+      line-height: 1.05;
+    }
+
+    .time span {
+      color: rgba(255,255,255,.43);
+      font-size: .58rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .summary-row {
+      margin-top: 13px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+
+    .mini-stat {
+      padding: 10px 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      text-align: center;
+    }
+
+    .mini-stat strong { display: block; font-size: 1rem; }
+    .mini-stat span { color: var(--muted); font-size: .63rem; font-weight: 700; }
+
+    .section-card {
+      margin-top: 13px;
+      padding: 18px;
+      border-radius: 22px;
+      background: var(--card);
+      box-shadow: 0 8px 25px rgba(7,19,15,.065);
+    }
+
+    .section-title {
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: -.02em;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 700;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+
+    .choice {
+      min-height: 48px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      background: #fff;
+      font-size: .73rem;
+      font-weight: 800;
+      transition: .2s ease;
+    }
+
+    .choice.active[data-attendance="playing"] { color: var(--ink); border-color: var(--lime); background: var(--lime); transform: translateY(-2px); }
+    .choice.active[data-attendance="maybe"] { color: #714916; border-color: #f4c77d; background: #fff0d6; }
+    .choice.active[data-attendance="out"] { color: #8c342d; border-color: #efaaa4; background: #ffe3e0; }
+
+    .field { margin-top: 12px; }
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    select, input {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink);
+      background: #fafbf7;
+      outline: none;
+    }
+
+    select:focus, input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(24,104,71,.10); }
+
+    .team-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .team-pick {
+      padding: 14px 10px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      text-align: left;
+      transition: .2s ease;
+    }
+
+    .team-pick.active {
+      color: #fff;
+      border-color: var(--ink);
+      background: var(--ink);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(7,19,15,.16);
+    }
+
+    .team-pick strong { display: block; font-size: .85rem; }
+    .team-pick span { color: var(--muted); font-size: .67rem; }
+    .team-pick.active span { color: rgba(255,255,255,.5); }
+
+    .primary {
+      width: 100%;
+      min-height: 50px;
+      margin-top: 13px;
+      border: 0;
+      border-radius: 15px;
+      color: var(--ink);
+      background: var(--lime);
+      font-weight: 900;
+      box-shadow: 0 9px 22px rgba(157,203,32,.25);
+      transition: transform .18s ease;
+    }
+
+    .primary:active { transform: scale(.98); }
+
+    .feedback {
+      min-height: 18px;
+      margin-top: 9px;
+      color: var(--green);
+      font-size: .72rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .teams-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .team-column {
+      min-width: 0;
+      padding: 13px 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fafbf7;
+    }
+
+    .team-column.a { border-top: 4px solid var(--blue); }
+    .team-column.b { border-top: 4px solid var(--red); }
+
+    .team-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+
+    .team-name {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: .78rem;
+      font-weight: 900;
+    }
+
+    .team-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); }
+    .b .team-dot { background: var(--red); }
+
+    .team-count {
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #edf0e8;
+      font-size: .61rem;
+      font-weight: 800;
+    }
+
+    .player-chip {
+      margin-top: 7px;
+      padding: 9px 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(7,19,15,.05);
+      animation: chipIn .28s ease both;
+    }
+
+    @keyframes chipIn {
+      from { opacity: 0; transform: scale(.88) translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .avatar {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #fff;
+      background: var(--green);
+      font-size: .66rem;
+      font-weight: 900;
+    }
+
+    .player-chip strong {
+      min-width: 0;
+      display: block;
+      overflow: hidden;
+      font-size: .69rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player-chip small { display: block; color: var(--muted); font-size: .55rem; }
+    .empty { padding: 15px 3px; color: var(--muted); font-size: .66rem; text-align: center; }
+
+    .notice {
+      margin-top: 10px;
+      padding: 11px 12px;
+      border-radius: 14px;
+      color: #6d561b;
+      background: #fff3ce;
+      font-size: .69rem;
+      font-weight: 700;
+    }
+
+    .page-heading { padding: 9px 3px 3px; }
+    .page-heading h2 { margin-bottom: 5px; font-size: 1.55rem; letter-spacing: -.045em; }
+    .page-heading p { color: var(--muted); font-size: .8rem; line-height: 1.5; }
+
+    .player-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .profile-card {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 6px 18px rgba(7,19,15,.055);
+    }
+
+    .profile-photo {
+      width: 56px;
+      height: 56px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      color: #fff;
+      background:
+        radial-gradient(circle at 25% 20%, rgba(255,255,255,.3), transparent 28%),
+        var(--green);
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .profile-content { min-width: 0; flex: 1; }
+    .profile-content h3 { margin: 0; font-size: .91rem; }
+    .profile-content p { margin: 3px 0 6px; color: var(--muted); font-size: .68rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag { padding: 4px 7px; border-radius: 999px; color: #385347; background: #eaf0eb; font-size: .56rem; font-weight: 800; }
+
+    .memory-list { display: grid; gap: 12px; }
+
+    .memory-card {
+      overflow: hidden;
+      border-radius: 22px;
+      background: var(--card);
+      box-shadow: 0 8px 24px rgba(7,19,15,.07);
+    }
+
+    .memory-photo {
+      height: 155px;
+      position: relative;
+      display: flex;
+      align-items: end;
+      padding: 14px;
+      overflow: hidden;
+      color: #fff;
+      background:
+        linear-gradient(transparent, rgba(7,19,15,.82)),
+        url("https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=900&q=80") center/cover;
+    }
+
+    .memory-card:nth-child(2) .memory-photo {
+      background:
+        linear-gradient(transparent, rgba(7,19,15,.82)),
+        url("https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=900&q=80") center/cover;
+    }
+
+    .scoreline {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -.04em;
+    }
+
+    .memory-content { padding: 14px; }
+    .memory-meta { color: var(--muted); font-size: .64rem; font-weight: 800; text-transform: uppercase; }
+    .memory-content h3 { margin: 6px 0 5px; font-size: .91rem; }
+    .memory-content p { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
+
+
+    .share-button {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      color: #fff;
+      background: var(--green);
+      font-weight: 900;
+      transition: transform .18s ease;
+    }
+
+    .share-button:active { transform: scale(.98); }
+
+    .memory-form {
+      margin-bottom: 12px;
+      padding: 16px;
+      border-radius: 22px;
+      background: var(--card);
+      box-shadow: 0 8px 24px rgba(7,19,15,.07);
+    }
+
+    .memory-form textarea {
+      width: 100%;
+      min-height: 90px;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink);
+      background: #fafbf7;
+      resize: vertical;
+      outline: none;
+    }
+
+    .memory-form textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(24,104,71,.10); }
+
+    .upload-box {
+      min-height: 92px;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      border: 1.5px dashed rgba(7,19,15,.18);
+      border-radius: 16px;
+      color: var(--muted);
+      background: #fafbf7;
+      text-align: center;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+
+    .upload-box input { display: none; }
+    .upload-box strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: .8rem; }
+    .memory-preview { width: 100%; max-height: 180px; margin-top: 10px; object-fit: cover; border-radius: 14px; }
+    .memory-comments { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .memory-comment { margin-top: 7px; padding: 9px 10px; border-radius: 12px; color: var(--muted); background: #f2f4ee; font-size: .68rem; line-height: 1.45; }
+    .comment-form { margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 7px; }
+    .comment-form select, .comment-form input { min-height: 42px; font-size: .72rem; }
+    .comment-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+    .comment-button { min-width: 70px; border: 0; border-radius: 12px; color: var(--ink); background: var(--lime); font-size: .68rem; font-weight: 900; }
+    .share-sheet-text { width: 100%; min-height: 175px; margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: #fff; resize: none; font-size: .76rem; line-height: 1.55; }
+    .share-actions { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .share-actions button, .share-actions a { min-height: 46px; display: grid; place-items: center; border: 0; border-radius: 14px; font-size: .75rem; font-weight: 900; text-align: center; }
+    .copy-share { color: var(--ink); background: var(--lime); }
+    .open-messenger { color: #fff; background: #1473e6; }
+    .share-help { margin: 10px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+
+    .create-card {
+      padding: 18px;
+      border-radius: 22px;
+      color: #fff;
+      background: var(--ink);
+    }
+
+    .create-card h3 { margin-bottom: 5px; }
+    .create-card p { color: rgba(255,255,255,.52); font-size: .72rem; }
+    .create-card label { color: rgba(255,255,255,.48); }
+    .create-card input {
+      color: #fff;
+      border-color: rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+    }
+
+    .secondary {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 12px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 15px;
+      color: var(--ink);
+      background: var(--lime);
+      font-weight: 900;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      z-index: 30;
+      left: 50%;
+      bottom: 0;
+      width: min(100%, 480px);
+      transform: translateX(-50%);
+      padding: 9px 12px calc(9px + var(--safe-bottom));
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid rgba(255,255,255,.08);
+      background: rgba(7,19,15,.94);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-item {
+      min-height: 55px;
+      border: 0;
+      border-radius: 15px;
+      color: rgba(255,255,255,.42);
+      background: transparent;
+      font-size: .58rem;
+      font-weight: 800;
+    }
+
+    .nav-item span {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 1.2rem;
+    }
+
+    .nav-item.active { color: var(--lime); background: rgba(255,255,255,.055); }
+
+    .modal {
+      position: fixed;
+      z-index: 50;
+      inset: 0;
+      padding: 18px;
+      display: none;
+      align-items: end;
+      justify-content: center;
+      background: rgba(7,19,15,.55);
+      backdrop-filter: blur(6px);
+    }
+
+    .modal.open { display: flex; }
+    .sheet {
+      width: min(100%, 446px);
+      padding: 20px;
+      border-radius: 25px;
+      background: var(--surface);
+      animation: sheetIn .3s ease both;
+    }
+
+    @keyframes sheetIn { from { transform: translateY(30px); opacity: 0; } }
+
+    .sheet-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sheet h3 { margin: 0; }
+    .close {
+      width: 37px;
+      height: 37px;
+      border: 0;
+      border-radius: 12px;
+      background: #e6e9e1;
+    }
+
+    .privacy-note {
+      margin-top: 15px;
+      padding: 13px;
+      border-radius: 15px;
+      color: var(--muted);
+      background: #e9ede5;
+      font-size: .7rem;
+      line-height: 1.55;
+    }
+
+    @media (min-width: 481px) {
+      .bottom-nav { border-radius: 22px 22px 0 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark">⚽</div>
+          <div>Sunday League<small>Private friends group</small></div>
+        </div>
+        <button class="icon-btn" id="settingsButton" aria-label="Match settings">⚙</button>
+      </div>
+
+      <div class="hero-copy">
+        <div class="private-badge">🔒 Friends only</div>
+        <h1>Our Sunday. Our teams.</h1>
+        <p>Create the match, pick a side, and keep the memories. No public sign-up and no player login.</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen active" id="homeScreen">
+        <article class="match-card">
+          <div class="match-head">
+            <div>
+              <div class="overline">Next match</div>
+              <h2 class="match-title" id="matchTitle">Sunday Evening Match</h2>
+            </div>
+            <div class="status">Voting open</div>
+          </div>
+
+          <div class="event-details">
+            <div class="detail"><span class="detail-icon">📅</span><span id="matchDateText">Sunday, 26 July 2026 · 6:00 PM</span></div>
+            <div class="detail"><span class="detail-icon">📍</span><span>AIT Football Field</span></div>
+            <div class="detail"><span class="detail-icon">👕</span><span>Bring one light and one dark shirt</span></div>
+          </div>
+
+          <div class="countdown" aria-label="Countdown to match">
+            <div class="time"><strong id="days">00</strong><span>Days</span></div>
+            <div class="time"><strong id="hours">00</strong><span>Hours</span></div>
+            <div class="time"><strong id="minutes">00</strong><span>Mins</span></div>
+            <div class="time"><strong id="seconds">00</strong><span>Secs</span></div>
+          </div>
+
+          <button class="share-button" id="shareMatch">↗ Share match to Messenger</button>
+
+          <div class="summary-row">
+            <div class="mini-stat"><strong id="playingCount">6</strong><span>Playing</span></div>
+            <div class="mini-stat"><strong id="teamACount">3</strong><span id="teamAStatLabel">Team A</span></div>
+            <div class="mini-stat"><strong id="teamBCount">3</strong><span id="teamBStatLabel">Team B</span></div>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-title">
+            <h2>Your match vote</h2>
+            <span>No login needed</span>
+          </div>
+
+          <div class="segmented" id="attendanceChoices">
+            <button class="choice active" data-attendance="playing">✓ Playing</button>
+            <button class="choice" data-attendance="maybe">? Maybe</button>
+            <button class="choice" data-attendance="out">× Can't play</button>
+          </div>
+
+          <div class="field">
+            <label for="playerSelect">Choose your name</label>
+            <select id="playerSelect">
+              <option value="">Select player</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Choose your team</label>
+            <div class="team-options">
+              <button class="team-pick active" data-team="A"><strong id="teamAPickLabel">Team A</strong><span>Blue side</span></button>
+              <button class="team-pick" data-team="B"><strong id="teamBPickLabel">Team B</strong><span>Red side</span></button>
+            </div>
+          </div>
+
+          <button class="primary" id="saveVote">Confirm my choice</button>
+          <div class="feedback" id="feedback" aria-live="polite"></div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-title">
+            <h2>Current teams</h2>
+            <span id="balanceText">Balanced teams</span>
+          </div>
+
+          <div class="teams-grid">
+            <div class="team-column a">
+              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamAHeader">Team A</span></div><span class="team-count" id="aBadge">3</span></div>
+              <div id="teamAList"></div>
+            </div>
+            <div class="team-column b">
+              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamBHeader">Team B</span></div><span class="team-count" id="bBadge">3</span></div>
+              <div id="teamBList"></div>
+            </div>
+          </div>
+
+          <div class="notice" id="teamNotice">Teams currently have equal numbers. Position balance can be handled by the organizer later.</div>
+        </article>
+      </section>
+
+      <section class="screen" id="playersScreen">
+        <div class="page-heading">
+          <h2>Our players</h2>
+          <p>The people behind the tackles, missed chances, and post-match dinners.</p>
+        </div>
+        <div class="player-list" id="playerProfiles"></div>
+      </section>
+
+      <section class="screen" id="memoriesScreen">
+        <div class="page-heading">
+          <h2>Match memories</h2>
+          <p>Previous scores, lineups, photos, and moments worth keeping.</p>
+        </div>
+        <article class="memory-form">
+          <div class="section-title">
+            <h2>Add a memory</h2>
+            <span>Everyone can post</span>
+          </div>
+          <div class="field">
+            <label for="memoryName">Your name</label>
+            <select id="memoryName"><option value="">Select player</option></select>
+          </div>
+          <div class="field">
+            <label for="memoryDate">Match day</label>
+            <input id="memoryDate" type="date" value="2026-07-26">
+          </div>
+          <div class="field">
+            <label for="memoryPhoto">Match photo</label>
+            <label class="upload-box" for="memoryPhoto">
+              <span><strong>📷 Choose a photo</strong>Tap to upload from your phone</span>
+              <input id="memoryPhoto" type="file" accept="image/*">
+            </label>
+            <img class="memory-preview" id="memoryPreview" alt="Selected memory preview" hidden>
+          </div>
+          <div class="field">
+            <label for="memoryComment">Comment</label>
+            <textarea id="memoryComment" placeholder="Write something about the match..."></textarea>
+          </div>
+          <button class="primary" id="postMemory">Post memory</button>
+          <div class="feedback" id="memoryFeedback" aria-live="polite"></div>
+        </article>
+
+        <div class="memory-list" id="memoryList">
+          <article class="memory-card">
+            <div class="memory-photo"><div><div class="memory-meta" style="color:rgba(255,255,255,.65)">12 July 2026</div><div class="scoreline">Team A 5 — 4 Team B</div></div></div>
+            <div class="memory-content">
+              <div class="memory-meta">AIT Football Field</div>
+              <h3>The comeback match</h3>
+              <p>Team A came back from two goals down. Min scored the winner and nobody remembered to take a proper team photo.</p><div class="memory-comments"><div class="memory-comment"><strong>Alex:</strong> Best comeback so far.</div></div><div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+            </div>
+          </article>
+
+          <article class="memory-card">
+            <div class="memory-photo"><div><div class="memory-meta" style="color:rgba(255,255,255,.65)">5 July 2026</div><div class="scoreline">Team A 3 — 3 Team B</div></div></div>
+            <div class="memory-content">
+              <div class="memory-meta">AIT Football Field</div>
+              <h3>The goalkeeper problem</h3>
+              <p>Six goals, three penalties, and twelve players avoiding goalkeeper duty. A classic Sunday.</p><div class="memory-comments"><div class="memory-comment"><strong>Kaung:</strong> Next time we choose the goalkeeper before kickoff.</div></div><div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="manageScreen">
+        <div class="page-heading">
+          <h2>Create next match</h2>
+          <p>Organizer UI preview. The location remains fixed at AIT Football Field.</p>
+        </div>
+
+        <article class="create-card">
+          <h3>Match information</h3>
+          <p>This currently updates only this device. Shared online data will be connected later.</p>
+
+          <div class="field">
+            <label for="newTitle">Match title</label>
+            <input id="newTitle" value="Sunday Evening Match" />
+          </div>
+
+          <div class="field">
+            <label for="teamANameInput">Team A name</label>
+            <input id="teamANameInput" value="Team A" />
+          </div>
+
+          <div class="field">
+            <label for="teamBNameInput">Team B name</label>
+            <input id="teamBNameInput" value="Team B" />
+          </div>
+
+          <div class="field">
+            <label for="newDate">Date and time</label>
+            <input id="newDate" type="datetime-local" value="2026-07-26T18:00" />
+          </div>
+
+          <div class="field">
+            <label>Location</label>
+            <input value="AIT Football Field" disabled />
+          </div>
+
+          <button class="secondary" id="updateMatch">Update match</button>
+          <div class="feedback" id="manageFeedback" aria-live="polite"></div>
+        </article>
+
+        <div class="privacy-note">
+          Future organizer controls can use a simple edit PIN. Players will only need the private group link to vote and choose a team.
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <button class="nav-item active" data-screen="homeScreen"><span>⚽</span>Match</button>
+      <button class="nav-item" data-screen="playersScreen"><span>👥</span>Players</button>
+      <button class="nav-item" data-screen="memoriesScreen"><span>📸</span>Memories</button>
+      <button class="nav-item" data-screen="manageScreen"><span>＋</span>Create</button>
+    </nav>
+  </div>
+
+  <div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-label="Share match message">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h3>Share match</h3>
+        <button class="close" id="closeShareModal" aria-label="Close">×</button>
+      </div>
+      <textarea class="share-sheet-text" id="shareText" readonly></textarea>
+      <div class="share-actions">
+        <button class="copy-share" id="copyShareText" type="button">Copy message</button>
+        <a class="open-messenger" href="https://www.messenger.com/" target="_blank" rel="noopener">Open Messenger</a>
+      </div>
+      <p class="share-help" id="shareHelp">Paste the copied message into your Messenger group. Native direct sharing becomes available after the site is deployed on HTTPS and opened in a supported mobile browser.</p>
+    </div>
+  </div>
+
+  <div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-label="Private group information">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h3>Private group board</h3>
+        <button class="close" id="closeModal" aria-label="Close">×</button>
+      </div>
+      <div class="privacy-note">
+        This interface is designed only for your friends. There is no public recruitment, contact form, or public player registration.
+        The final version can use one private link and an organizer edit PIN.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const players = [
+      { id: "kaung", name: "Kaung", role: "Midfielder", number: 10, note: "Creates chances and debates formations.", team: "A", status: "playing" },
+      { id: "min", name: "Min", role: "Forward", number: 9, note: "Shoots whenever the goal is visible.", team: "A", status: "playing" },
+      { id: "aung", name: "Aung", role: "Defender", number: 5, note: "Simple passes and serious tackles.", team: "A", status: "playing" },
+      { id: "alex", name: "Alex", role: "Midfielder", number: 8, note: "Keeps the ball and the group chat moving.", team: "B", status: "playing" },
+      { id: "ben", name: "Ben", role: "Forward", number: 11, note: "Fast feet, unpredictable finishing.", team: "B", status: "playing" },
+      { id: "daniel", name: "Daniel", role: "Goalkeeper", number: 1, note: "Goalkeeper only when absolutely necessary.", team: "B", status: "playing" },
+      { id: "chris", name: "Chris", role: "Defender", number: 4, note: "Arrives late but always brings water.", team: null, status: "maybe" },
+      { id: "john", name: "John", role: "Midfielder", number: 7, note: "Runs all game and asks for one more match.", team: null, status: "out" }
+    ];
+
+    let matchDate = new Date("2026-07-26T18:00:00+07:00");
+    let selectedAttendance = "playing";
+    let selectedTeam = "A";
+    let teamAName = "Team A";
+    let teamBName = "Team B";
+    let selectedMemoryDataUrl = "";
+
+    const playerSelect = document.getElementById("playerSelect");
+    const memoryName = document.getElementById("memoryName");
+    players.forEach(player => {
+      const option = document.createElement("option");
+      option.value = player.id;
+      option.textContent = `${player.name} · ${player.role}`;
+      playerSelect.appendChild(option);
+      const memoryOption = option.cloneNode(true);
+      memoryName.appendChild(memoryOption);
+    });
+
+    function populateCommenterSelects(root = document) {
+      root.querySelectorAll(".commenter-select").forEach(select => {
+        if (select.options.length) return;
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Comment as...";
+        select.appendChild(placeholder);
+        players.forEach(player => {
+          const option = document.createElement("option");
+          option.value = player.id;
+          option.textContent = player.name;
+          select.appendChild(option);
+        });
+      });
+    }
+
+    function initials(name) {
+      return name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
+    }
+
+    function renderTeams() {
+      const playing = players.filter(p => p.status === "playing");
+      const teamA = playing.filter(p => p.team === "A");
+      const teamB = playing.filter(p => p.team === "B");
+
+      const markup = list => list.length
+        ? list.map(p => `<div class="player-chip"><div class="avatar">${initials(p.name)}</div><div><strong>${p.name}</strong><small>${p.role}</small></div></div>`).join("")
+        : `<div class="empty">No players yet</div>`;
+
+      document.getElementById("teamAList").innerHTML = markup(teamA);
+      document.getElementById("teamBList").innerHTML = markup(teamB);
+      document.getElementById("playingCount").textContent = playing.length;
+      document.getElementById("teamACount").textContent = teamA.length;
+      document.getElementById("teamBCount").textContent = teamB.length;
+      document.getElementById("aBadge").textContent = teamA.length;
+      document.getElementById("bBadge").textContent = teamB.length;
+
+      const difference = Math.abs(teamA.length - teamB.length);
+      const balance = document.getElementById("balanceText");
+      const notice = document.getElementById("teamNotice");
+
+      if (difference === 0) {
+        balance.textContent = "Balanced teams";
+        notice.textContent = "Teams currently have equal numbers. Position balance can be handled by the organizer later.";
+      } else if (difference === 1) {
+        balance.textContent = "Almost balanced";
+        notice.textContent = "The teams differ by one player. This is usually fine while voting is still open.";
+      } else {
+        balance.textContent = "Needs balancing";
+        notice.textContent = `The teams differ by ${difference} players. Move someone before the match starts.`;
+      }
+    }
+
+    function renderProfiles() {
+      document.getElementById("playerProfiles").innerHTML = players.map((p, index) => `
+        <article class="profile-card">
+          <div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(p.name)}</div>
+          <div class="profile-content">
+            <h3>${p.name} · No. ${p.number}</h3>
+            <p>${p.note}</p>
+            <div class="tags">
+              <span class="tag">${p.role}</span>
+              <span class="tag">${p.status === "playing" ? ` ${p.team === "A" ? teamAName : teamBName}` : p.status}</span>
+            </div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    document.querySelectorAll("[data-attendance]").forEach(button => {
+      button.addEventListener("click", () => {
+        selectedAttendance = button.dataset.attendance;
+        document.querySelectorAll("[data-attendance]").forEach(b => b.classList.toggle("active", b === button));
+        document.querySelector(".team-options").style.opacity = selectedAttendance === "playing" ? "1" : ".38";
+        document.querySelectorAll(".team-pick").forEach(b => b.disabled = selectedAttendance !== "playing");
+      });
+    });
+
+    document.querySelectorAll("[data-team]").forEach(button => {
+      button.addEventListener("click", () => {
+        selectedTeam = button.dataset.team;
+        document.querySelectorAll("[data-team]").forEach(b => b.classList.toggle("active", b === button));
+      });
+    });
+
+    document.getElementById("saveVote").addEventListener("click", () => {
+      const id = playerSelect.value;
+      const feedback = document.getElementById("feedback");
+
+      if (!id) {
+        feedback.textContent = "Choose your name first.";
+        return;
+      }
+
+      const player = players.find(p => p.id === id);
+      player.status = selectedAttendance;
+      player.team = selectedAttendance === "playing" ? selectedTeam : null;
+
+      renderTeams();
+      renderProfiles();
+      feedback.textContent = selectedAttendance === "playing"
+        ? `${player.name} is confirmed for ${selectedTeam === "A" ? teamAName : teamBName}.`
+        : `${player.name}'s attendance has been updated.`;
+
+      setTimeout(() => feedback.textContent = "", 3500);
+    });
+
+    function updateCountdown() {
+      const distance = Math.max(0, matchDate.getTime() - Date.now());
+      document.getElementById("days").textContent = String(Math.floor(distance / 86400000)).padStart(2, "0");
+      document.getElementById("hours").textContent = String(Math.floor((distance % 86400000) / 3600000)).padStart(2, "0");
+      document.getElementById("minutes").textContent = String(Math.floor((distance % 3600000) / 60000)).padStart(2, "0");
+      document.getElementById("seconds").textContent = String(Math.floor((distance % 60000) / 1000)).padStart(2, "0");
+    }
+
+    document.getElementById("updateMatch").addEventListener("click", () => {
+      const title = document.getElementById("newTitle").value.trim() || "Sunday Match";
+      const value = document.getElementById("newDate").value;
+      const feedback = document.getElementById("manageFeedback");
+
+      if (!value) {
+        feedback.textContent = "Choose a date and time.";
+        return;
+      }
+
+      matchDate = new Date(`${value}:00+07:00`);
+      teamAName = document.getElementById("teamANameInput").value.trim() || "Team A";
+      teamBName = document.getElementById("teamBNameInput").value.trim() || "Team B";
+      document.getElementById("matchTitle").textContent = title;
+      document.getElementById("teamAStatLabel").textContent = teamAName;
+      document.getElementById("teamBStatLabel").textContent = teamBName;
+      document.getElementById("teamAPickLabel").textContent = teamAName;
+      document.getElementById("teamBPickLabel").textContent = teamBName;
+      document.getElementById("teamAHeader").textContent = teamAName;
+      document.getElementById("teamBHeader").textContent = teamBName;
+      document.getElementById("matchDateText").textContent = matchDate.toLocaleString("en-GB", {
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
+        hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Bangkok"
+      });
+      feedback.textContent = "Match updated on this device.";
+      updateCountdown();
+    });
+
+
+    function buildShareMessage() {
+      const title = document.getElementById("matchTitle").textContent;
+      const dateText = document.getElementById("matchDateText").textContent;
+      const pageUrl = location.protocol === "http:" || location.protocol === "https:"
+        ? window.location.href
+        : "[Add the deployed website link here]";
+      return `⚽ ${title}\n📅 ${dateText}\n📍 AIT Football Field\n🔵 ${teamAName} vs 🔴 ${teamBName}\n\nOpen the match link to vote and choose your team:\n${pageUrl}`;
+    }
+
+    function openShareFallback(message, helpText) {
+      document.getElementById("shareText").value = message;
+      document.getElementById("shareHelp").textContent = helpText || "Copy the message, open Messenger, and paste it into your group.";
+      document.getElementById("shareModal").classList.add("open");
+    }
+
+    document.getElementById("shareMatch").addEventListener("click", async () => {
+      const title = document.getElementById("matchTitle").textContent;
+      const text = buildShareMessage();
+      const canNativeShare = typeof navigator.share === "function" && window.isSecureContext && /^https?:$/.test(location.protocol);
+
+      if (!canNativeShare) {
+        openShareFallback(text, "This preview is not a public HTTPS page, so iPhone cannot open the native share sheet here. Copy the message, then open Messenger and paste it into your group.");
+        return;
+      }
+
+      try {
+        await navigator.share({ title, text });
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          openShareFallback(text, "Native sharing was blocked by this browser. Copy the message and paste it into your Messenger group.");
+        }
+      }
+    });
+
+    document.getElementById("copyShareText").addEventListener("click", async () => {
+      const textarea = document.getElementById("shareText");
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        copied = true;
+      } catch (_) {
+        textarea.focus();
+        textarea.select();
+        copied = document.execCommand("copy");
+      }
+      document.getElementById("shareHelp").textContent = copied
+        ? "Message copied. Tap Open Messenger, choose your group, and paste it."
+        : "Select the message manually, copy it, and paste it into Messenger.";
+    });
+
+    document.getElementById("memoryPhoto").addEventListener("change", event => {
+      const file = event.target.files[0];
+      const preview = document.getElementById("memoryPreview");
+      if (!file) {
+        selectedMemoryDataUrl = "";
+        preview.hidden = true;
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        selectedMemoryDataUrl = reader.result;
+        preview.src = selectedMemoryDataUrl;
+        preview.hidden = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById("postMemory").addEventListener("click", () => {
+      const playerId = memoryName.value;
+      const comment = document.getElementById("memoryComment").value.trim();
+      const memoryDateValue = document.getElementById("memoryDate").value;
+      const feedback = document.getElementById("memoryFeedback");
+
+      if (!playerId) {
+        feedback.textContent = "Choose your name first.";
+        return;
+      }
+      if (!selectedMemoryDataUrl && !comment) {
+        feedback.textContent = "Add a photo or write a comment.";
+        return;
+      }
+
+      const player = players.find(p => p.id === playerId);
+      const memoryDate = memoryDateValue
+        ? new Date(`${memoryDateValue}T12:00:00+07:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok" })
+        : "Match day not selected";
+      const card = document.createElement("article");
+      card.className = "memory-card";
+      const photoStyle = selectedMemoryDataUrl
+        ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${selectedMemoryDataUrl}') center/cover;`
+        : `background:linear-gradient(135deg, #123e2c, #07130f);`;
+      card.innerHTML = `
+        <div class="memory-photo" style="${photoStyle}">
+          <div><div class="memory-meta" style="color:rgba(255,255,255,.65)">${memoryDate}</div><div class="scoreline">Match memory</div></div>
+        </div>
+        <div class="memory-content">
+          <div class="memory-meta">AIT Football Field</div>
+          <h3>Posted by ${player.name}</h3>
+          <p>${comment || "Shared a new match photo."}</p>
+          <div class="memory-comments"><div class="memory-comment"><strong>${player.name}:</strong> ${comment || "Great Sunday with the group."}</div></div>
+          <div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+        </div>`;
+      document.getElementById("memoryList").prepend(card);
+      populateCommenterSelects(card);
+
+      document.getElementById("memoryComment").value = "";
+      document.getElementById("memoryPhoto").value = "";
+      document.getElementById("memoryPreview").hidden = true;
+      selectedMemoryDataUrl = "";
+      feedback.textContent = "Memory added on this device.";
+    });
+
+    document.getElementById("memoryList").addEventListener("click", event => {
+      const button = event.target.closest(".comment-button");
+      if (!button) return;
+      const form = button.closest(".comment-form");
+      const select = form.querySelector(".commenter-select");
+      const input = form.querySelector(".comment-input");
+      const player = players.find(p => p.id === select.value);
+      const value = input.value.trim();
+      if (!player) { input.placeholder = "Choose your name first"; return; }
+      if (!value) { input.placeholder = "Write a comment first"; return; }
+      const comment = document.createElement("div");
+      comment.className = "memory-comment";
+      comment.innerHTML = `<strong>${player.name}:</strong> ${value.replace(/[<>]/g, "")}`;
+      form.previousElementSibling.appendChild(comment);
+      input.value = "";
+      input.placeholder = "Comment posted on this device";
+    });
+
+    populateCommenterSelects();
+
+    document.getElementById("closeShareModal").addEventListener("click", () => document.getElementById("shareModal").classList.remove("open"));
+    document.getElementById("shareModal").addEventListener("click", event => { if (event.target.id === "shareModal") event.currentTarget.classList.remove("open"); });
+
+    document.querySelectorAll(".nav-item").forEach(item => {
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i === item));
+        document.querySelectorAll(".screen").forEach(screen => screen.classList.toggle("active", screen.id === item.dataset.screen));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    const modal = document.getElementById("settingsModal");
+    document.getElementById("settingsButton").addEventListener("click", () => modal.classList.add("open"));
+    document.getElementById("closeModal").addEventListener("click", () => modal.classList.remove("open"));
+    modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
+
+    renderTeams();
+    renderProfiles();
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+  </script>
+</body>
+</html>
