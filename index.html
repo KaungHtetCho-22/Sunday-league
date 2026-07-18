@@ -622,6 +622,32 @@
       font-weight: 700;
     }
 
+    .planned-arrival-row {
+      margin-top: 8px;
+      padding: 10px 11px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fafbf7;
+    }
+
+    .planned-arrival-row.current-user {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(24,104,71,.08);
+    }
+
+    .planned-arrival-time {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: var(--lime);
+      font-size: .66rem;
+      font-weight: 900;
+    }
+
     .arrival-toast {
       position: fixed;
       z-index: 45;
@@ -1090,7 +1116,7 @@
 
           <div class="notice identity-notice" id="teamIdentity">
             <strong id="teamIdentityName">Register a player profile first</strong>
-            <span>Choose Team A or Team B, then confirm. Your name will appear for everyone.</span>
+            <span>Choose Team A or Team B, then confirm. New players can also join after the time is confirmed.</span>
           </div>
 
           <div class="field">
@@ -1103,6 +1129,36 @@
 
           <button class="primary" id="saveVote">Confirm team choice</button>
           <div class="feedback" id="feedback" aria-live="polite"></div>
+        </article>
+
+        <article class="section-card" id="plannedArrivalCard" style="display:none">
+          <div class="section-title">
+            <h2>When will you arrive?</h2>
+            <span>Visible to everyone</span>
+          </div>
+
+          <div class="notice identity-notice">
+            <strong id="plannedArrivalIdentityName">Register a player profile first</strong>
+            <span>This does not change the confirmed match time. It only tells the group when you expect to reach the field.</span>
+          </div>
+
+          <div class="field">
+            <label>Expected arrival time</label>
+            <div class="availability-options" id="plannedArrivalOptions"></div>
+          </div>
+
+          <button class="primary" id="savePlannedArrival" type="button">
+            Save my arrival time
+          </button>
+          <div class="feedback" id="plannedArrivalFeedback" aria-live="polite"></div>
+
+          <div style="margin-top:14px">
+            <div class="section-title" style="margin-bottom:8px">
+              <h2>Who is coming when?</h2>
+              <span id="plannedArrivalCount">0 players</span>
+            </div>
+            <div id="plannedArrivalList"></div>
+          </div>
         </article>
 
         <article class="section-card" id="teamsCard" style="display:none">
@@ -1122,7 +1178,7 @@
             </div>
           </div>
 
-          <div class="notice" id="teamNotice">Teams will appear after the match time is confirmed.</div>
+          <div class="notice" id="teamNotice">After the time is confirmed, any registered player can choose a team.</div>
         </article>
 
         <article class="section-card" id="arrivalCard" style="display:none">
@@ -1372,9 +1428,13 @@
     let matchRefreshTimer = null;
     let fullRefreshTimer = null;
     let arrivals = [];
+    let arrivalPlans = [];
+    let selectedPlannedArrival = null;
     let arrivalToastTimer = null;
 
     const availabilityOptions = document.getElementById("availabilityOptions");
+    const plannedArrivalOptions =
+      document.getElementById("plannedArrivalOptions");
     const profileEditor = document.getElementById("profileEditor");
     const profileName = document.getElementById("profileName");
     const profileNumber = document.getElementById("profileNumber");
@@ -1644,7 +1704,7 @@
         ? currentPlayer.name
         : "register first";
 
-      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName", "arrivalIdentityName"].forEach(id => {
+      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName", "arrivalIdentityName", "plannedArrivalIdentityName"].forEach(id => {
         const element = document.getElementById(id);
         if (element) element.textContent = displayName;
       });
@@ -1677,6 +1737,19 @@
           button.dataset.team === selectedTeam
         );
       });
+
+      const savedPlan = currentPlayer
+        ? arrivalPlans.find(plan => plan.player_id === currentPlayer.id)
+        : null;
+
+      selectedPlannedArrival =
+        normalizeTime(savedPlan?.expected_arrival_time) ||
+        selectedPlannedArrival;
+
+      document.getElementById("savePlannedArrival").disabled =
+        !hasProfile || activeMatch?.status !== "confirmed";
+
+      renderPlannedArrivalOptions();
 
       const arrivedButton = document.getElementById("arrivedButton");
       const alreadyArrived = Boolean(currentPlayer?.arrivedAt);
@@ -2149,6 +2222,8 @@
       availabilityVotes = {};
       selectedAvailability = new Set();
       arrivals = [];
+      arrivalPlans = [];
+      selectedPlannedArrival = null;
       teamAName = "Team A";
       teamBName = "Team B";
       resetPlayerMatchState();
@@ -2206,19 +2281,28 @@
         .eq("match_id", match.id)
         .order("arrived_at", { ascending: true });
 
+      const arrivalPlansPromise = window.db
+        .from("match_arrival_plans")
+        .select("player_id, expected_arrival_time, updated_at")
+        .eq("match_id", match.id)
+        .order("expected_arrival_time", { ascending: true });
+
       const [
         { data: voteRows, error: voteError },
         { data: teamRows, error: teamError },
-        { data: arrivalRows, error: arrivalError }
+        { data: arrivalRows, error: arrivalError },
+        { data: arrivalPlanRows, error: arrivalPlanError }
       ] = await Promise.all([
         votesPromise,
         teamsPromise,
-        arrivalsPromise
+        arrivalsPromise,
+        arrivalPlansPromise
       ]);
 
       if (voteError) throw voteError;
       if (teamError) throw teamError;
       if (arrivalError) throw arrivalError;
+      if (arrivalPlanError) throw arrivalPlanError;
 
       activeMatch = match;
       activeTimeOptions = optionRows;
@@ -2252,6 +2336,7 @@
 
       resetPlayerMatchState();
       arrivals = arrivalRows || [];
+      arrivalPlans = arrivalPlanRows || [];
 
       teamRows.forEach(row => {
         const player = players.find(item => item.id === row.player_id);
@@ -2268,11 +2353,7 @@
       if (confirmedTime) {
         players.forEach(player => {
           if (player.team) return;
-
-          player.status = (availabilityVotes[player.id] || [])
-            .includes(confirmedTime)
-              ? "available"
-              : "out";
+          player.status = "available";
         });
       }
 
@@ -2283,6 +2364,11 @@
           : []
       );
       selectedTeam = currentPlayer?.team || "A";
+      selectedPlannedArrival = normalizeTime(
+        arrivalPlans.find(
+          plan => plan.player_id === currentPlayer?.id
+        )?.expected_arrival_time
+      );
 
       updateMatchUI();
     }
@@ -2297,6 +2383,8 @@
       const joinConfirmedCard = document.getElementById("joinConfirmedCard");
       const teamsCard = document.getElementById("teamsCard");
       const arrivalCard = document.getElementById("arrivalCard");
+      const plannedArrivalCard =
+        document.getElementById("plannedArrivalCard");
 
       if (!activeMatch) {
         matchTitle.textContent = "No upcoming match";
@@ -2309,6 +2397,8 @@
         joinConfirmedCard.style.display = "none";
         teamsCard.style.display = "none";
         arrivalCard.style.display = "none";
+        plannedArrivalCard.style.display = "none";
+        plannedArrivalCard.style.display = "none";
         arrivalCard.style.display = "none";
 
         document.getElementById("voterCount").textContent = "0";
@@ -2320,6 +2410,7 @@
 
         renderAvailabilityOptions();
         renderTeams();
+        renderPlannedArrivals();
         renderArrivals();
         updateCountdown();
         updateAutomaticIdentityUI();
@@ -2346,6 +2437,7 @@
         joinConfirmedCard.style.display = "block";
         teamsCard.style.display = "block";
         arrivalCard.style.display = "block";
+        plannedArrivalCard.style.display = "block";
       } else {
         matchStatus.textContent = "Time voting";
         timeStateText.textContent =
@@ -2359,6 +2451,7 @@
       renderAvailabilityOptions();
       renderTimeResults();
       renderTeams();
+      renderPlannedArrivals();
       renderArrivals();
       updateCountdown();
       updateAutomaticIdentityUI();
@@ -2494,7 +2587,7 @@
 
       if (activeMatch.status === "confirmed" && confirmedTime) {
         notice.textContent =
-          `${formatTime(confirmedTime)} is confirmed. Only players who voted for this time can choose a team.`;
+          `${formatTime(confirmedTime)} is confirmed. Any registered player can now choose a team.`;
       } else if (reachedOptions.length && organizer) {
         notice.textContent =
           "The minimum has been reached. As match creator, choose the final time above.";
@@ -2608,6 +2701,156 @@
         balance.textContent = "Needs balancing";
         notice.textContent =
           `The teams differ by ${difference} players.`;
+      }
+    }
+
+    function renderPlannedArrivalOptions() {
+      if (!plannedArrivalOptions) return;
+
+      if (!activeMatch || activeMatch.status !== "confirmed") {
+        plannedArrivalOptions.innerHTML =
+          `<div class="notice" style="grid-column:1/-1">The match time must be confirmed first.</div>`;
+        return;
+      }
+
+      const currentPlayer = getCurrentPlayer();
+      const canChoose = Boolean(currentPlayer);
+
+      plannedArrivalOptions.innerHTML = timeOptions.map(time => `
+        <button
+          type="button"
+          class="availability-option ${selectedPlannedArrival === time ? "active" : ""}"
+          data-planned-arrival-time="${time}"
+          ${canChoose ? "" : "disabled"}
+        >
+          <strong>${formatTime(time)}</strong>
+          <span>Expected arrival</span>
+        </button>
+      `).join("");
+
+      plannedArrivalOptions
+        .querySelectorAll("[data-planned-arrival-time]")
+        .forEach(button => {
+          button.addEventListener("click", () => {
+            selectedPlannedArrival =
+              button.dataset.plannedArrivalTime;
+            renderPlannedArrivalOptions();
+          });
+        });
+    }
+
+    function renderPlannedArrivals() {
+      const list =
+        document.getElementById("plannedArrivalList");
+      const count =
+        document.getElementById("plannedArrivalCount");
+      const currentPlayer = getCurrentPlayer();
+
+      if (!activeMatch || activeMatch.status !== "confirmed") {
+        list.innerHTML = "";
+        count.textContent = "0 players";
+        return;
+      }
+
+      const visiblePlans = arrivalPlans
+        .map(plan => ({
+          ...plan,
+          player: players.find(
+            player => player.id === plan.player_id
+          )
+        }))
+        .filter(item => item.player)
+        .sort((a, b) =>
+          String(a.expected_arrival_time)
+            .localeCompare(String(b.expected_arrival_time))
+        );
+
+      count.textContent =
+        `${visiblePlans.length} ${visiblePlans.length === 1 ? "player" : "players"}`;
+
+      list.innerHTML = visiblePlans.length
+        ? visiblePlans.map(item => `
+            <div class="planned-arrival-row ${item.player.id === currentPlayer?.id ? "current-user" : ""}">
+              ${item.player.photo
+                ? `<img class="avatar" src="${item.player.photo}" alt="" style="object-fit:cover">`
+                : `<div class="avatar">${initials(item.player.name)}</div>`}
+              <div class="arrival-row-content">
+                <strong>${escapeHtml(item.player.name)}</strong>
+                <span>${item.player.team ? `Joined ${item.player.team === "A" ? teamAName : teamBName}` : "Team not selected yet"}</span>
+              </div>
+              <span class="planned-arrival-time">
+                ${formatTime(item.expected_arrival_time)}
+              </span>
+            </div>
+          `).join("")
+        : `<div class="empty">Nobody has shared an arrival time yet</div>`;
+    }
+
+    async function savePlannedArrivalToSupabase() {
+      const player = getCurrentPlayer();
+      const feedback =
+        document.getElementById("plannedArrivalFeedback");
+      const button =
+        document.getElementById("savePlannedArrival");
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile first.";
+        return;
+      }
+
+      if (
+        !activeMatch ||
+        activeMatch.status !== "confirmed"
+      ) {
+        feedback.textContent =
+          "The match time must be confirmed first.";
+        return;
+      }
+
+      if (!selectedPlannedArrival) {
+        feedback.textContent =
+          "Choose when you expect to arrive.";
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Saving…";
+      feedback.textContent = "";
+
+      try {
+        const { error } = await window.db
+          .from("match_arrival_plans")
+          .upsert(
+            {
+              match_id: activeMatch.id,
+              player_id: player.id,
+              created_by: currentSupabaseUser.id,
+              expected_arrival_time:
+                selectedPlannedArrival
+            },
+            {
+              onConflict: "match_id,player_id"
+            }
+          );
+
+        if (error) throw error;
+
+        await loadActiveMatchFromSupabase();
+
+        feedback.textContent =
+          `${player.name} plans to arrive at ${formatTime(selectedPlannedArrival)}. Everyone can now see it.`;
+      } catch (error) {
+        console.error(
+          "Could not save planned arrival:",
+          error
+        );
+        feedback.textContent =
+          error.message ||
+          "Could not save your arrival time.";
+      } finally {
+        button.textContent = "Save my arrival time";
+        updateAutomaticIdentityUI();
       }
     }
 
@@ -2862,16 +3105,6 @@
       ) {
         feedback.textContent =
           "The match time must be confirmed first.";
-        return;
-      }
-
-      const isAvailable =
-        (availabilityVotes[player.id] || [])
-          .includes(confirmedTime);
-
-      if (!isAvailable) {
-        feedback.textContent =
-          `${player.name} did not vote for ${formatTime(confirmedTime)}, so this profile cannot join the teams.`;
         return;
       }
 
@@ -3161,6 +3394,15 @@ ${pageUrl}`;
         .on(
           "postgres_changes",
           {
+            event: "*",
+            schema: "public",
+            table: "match_arrival_plans"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
             event: "INSERT",
             schema: "public",
             table: "match_arrivals"
@@ -3426,6 +3668,12 @@ ${pageUrl}`;
       .addEventListener(
         "click",
         saveTeamChoiceToSupabase
+      );
+
+    document.getElementById("savePlannedArrival")
+      .addEventListener(
+        "click",
+        savePlannedArrivalToSupabase
       );
 
     document.getElementById("arrivedButton")
