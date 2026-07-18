@@ -428,6 +428,50 @@
       background: #ffe3e0;
     }
 
+    .attendance-options {
+      margin: 14px 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .attendance-choice {
+      min-height: 92px;
+      padding: 15px;
+      display: grid;
+      align-content: center;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      color: var(--ink);
+      background: #fff;
+      text-align: left;
+      transition: .18s ease;
+    }
+
+    .attendance-choice strong {
+      font-size: .82rem;
+    }
+
+    .attendance-choice span {
+      color: var(--muted);
+      font-size: .65rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .attendance-choice.active {
+      border-color: var(--green);
+      background: #eef8f1;
+      box-shadow: 0 0 0 3px rgba(24,104,71,.09);
+    }
+
+    .attendance-choice.unavailable.active {
+      border-color: #ef8f86;
+      background: #fff0ee;
+      box-shadow: 0 0 0 3px rgba(223,81,68,.08);
+    }
+
     .upcoming-match-item {
       width: 100%;
       margin-top: 9px;
@@ -865,7 +909,9 @@
 
     .compact-button {
       min-height: 48px;
+      margin-top: 0;
       padding: 0 15px;
+      align-self: stretch;
       white-space: nowrap;
     }
 
@@ -1063,19 +1109,35 @@
     .share-help { margin: 10px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.5; }
 
     .create-card {
+      margin-top: 13px;
       padding: 18px;
       border-radius: 22px;
-      color: #fff;
-      background: var(--ink);
+      color: var(--ink);
+      background: var(--card);
+      box-shadow: 0 8px 25px rgba(7,19,15,.065);
     }
 
-    .create-card h3 { margin-bottom: 5px; }
-    .create-card p { color: rgba(255,255,255,.52); font-size: .72rem; }
-    .create-card label { color: rgba(255,255,255,.48); }
-    .create-card input {
-      color: #fff;
-      border-color: rgba(255,255,255,.12);
-      background: rgba(255,255,255,.08);
+    .create-card-title { margin-bottom: 14px; }
+    .create-card h3, .create-card h2 { margin: 0; }
+    .create-card p { color: var(--muted); font-size: .72rem; }
+    .create-card label { color: var(--muted); }
+    .create-card input, .create-card select, .create-card textarea {
+      color: var(--ink);
+      border-color: var(--line);
+      background: #fff;
+    }
+
+    .create-card input:disabled {
+      color: var(--ink);
+      background: #f2f4ee;
+    }
+
+    .create-card .field-help {
+      color: var(--muted);
+    }
+
+    .create-card .time-slot-picker {
+      background: #fafbf7;
     }
 
     .secondary {
@@ -1221,18 +1283,19 @@
             <div class="detail"><span class="detail-icon">📅</span><span id="fixedDateText">Sunday, 26 July 2026</span></div>
             <div class="detail"><span class="detail-icon">📍</span><span>AIT Football Field</span></div>
             <div class="detail"><span class="detail-icon">👤</span><span id="matchCreatorText">Created by a registered player</span></div>
-            <div class="detail"><span class="detail-icon">🗳️</span><span id="timeStateText">Choose every time you are available</span></div>
+            <div class="detail"><span class="detail-icon">🗳️</span><span id="timeStateText">Choose Yes or No, then share when you expect to arrive</span></div>
           </div>
 
           <div id="preConfirmSummary">
             <div class="summary-row">
-              <div class="mini-stat"><strong id="voterCount">0</strong><span>Voted</span></div>
-              <div class="mini-stat"><strong id="leadingTime">—</strong><span>Leading time</span></div>
-              <div class="mini-stat"><strong id="leadingVotes">0</strong><span>Available</span></div>
+              <div class="mini-stat"><strong id="voterCount">0</strong><span>Playing</span></div>
+              <div class="mini-stat"><strong id="leadingTime">—</strong><span>Expected start</span></div>
+              <div class="mini-stat"><strong id="leadingVotes">0</strong><span>Not available</span></div>
             </div>
           </div>
 
-          <button class="primary" id="shareMatch" type="button" style="margin-top:13px">Share match</button>
+          <button class="secondary" id="confirmMatchNow" type="button" style="display:none;margin-top:13px">Confirm match now</button>
+          <button class="primary" id="shareMatch" type="button" style="margin-top:10px">Share match</button>
 
           <div id="confirmedSummary" style="display:none">
             <div class="countdown" aria-label="Countdown to match">
@@ -1252,31 +1315,28 @@
 
         <article class="section-card" id="availabilityCard">
           <div class="section-title">
-            <h2>Your availability</h2>
-            <span>Select multiple times</span>
+            <h2>Will you play?</h2>
+            <span>Visible to everyone</span>
           </div>
 
           <div class="notice identity-notice" id="availabilityIdentity">
             <strong id="availabilityIdentityName">Register a player profile first</strong>
-            <span>Your availability will automatically use your profile.</span>
+            <span>Your response will automatically use your profile.</span>
           </div>
 
-          <div class="field">
-            <label>Which times can you play?</label>
-            <div class="availability-options" id="availabilityOptions"></div>
+          <div class="attendance-options" id="availabilityOptions">
+            <button class="attendance-choice" type="button" data-attendance-response="available">
+              <strong>✅ Yes, I will play</strong>
+              <span>Count me in for this match</span>
+            </button>
+            <button class="attendance-choice unavailable" type="button" data-attendance-response="unavailable">
+              <strong>❌ No, not available</strong>
+              <span>I cannot attend this match</span>
+            </button>
           </div>
 
-          <button class="primary" id="saveAvailability">Save my availability</button>
+          <button class="primary" id="saveAvailability">Save my response</button>
           <div class="feedback" id="availabilityFeedback" aria-live="polite"></div>
-        </article>
-
-        <article class="section-card" id="timeResultsCard">
-          <div class="section-title">
-            <h2>Time results</h2>
-            <span id="minimumRule">3 players needed</span>
-          </div>
-          <div id="timeResults"></div>
-          <div class="notice" id="timeNotice">No time has reached the minimum yet.</div>
         </article>
 
         <article class="section-card" id="joinConfirmedCard" style="display:none">
@@ -1310,7 +1370,7 @@
 
           <div class="notice identity-notice">
             <strong id="plannedArrivalIdentityName">Register a player profile first</strong>
-            <span>This does not change the confirmed match time. It only tells the group when you expect to reach the field.</span>
+            <span>Choose when you expect to reach the field. The average is shown as the expected start time.</span>
           </div>
 
           <div class="field">
@@ -1319,7 +1379,7 @@
           </div>
 
           <button class="primary" id="savePlannedArrival" type="button">
-            Save my arrival time
+            Save expected arrival
           </button>
           <div class="feedback" id="plannedArrivalFeedback" aria-live="polite"></div>
 
@@ -1372,11 +1432,6 @@
       </section>
 
       <section class="screen" id="playersScreen">
-        <div class="page-heading">
-          <h2>Our players</h2>
-          
-        </div>
-
         <article class="section-card">
           <div class="section-title">
             <h2 id="profileFormTitle">Create your profile</h2>
@@ -1446,10 +1501,6 @@
       </section>
 
       <section class="screen" id="memoriesScreen">
-        <div class="page-heading">
-          <h2>Match memories</h2>
-          <p>Previous scores, lineups, photos, and moments worth keeping.</p>
-        </div>
         <article class="memory-form">
           <div class="section-title">
             <h2>Add a memory</h2>
@@ -1487,14 +1538,10 @@
       </section>
 
       <section class="screen" id="manageScreen">
-        <div class="page-heading">
-          <h2>Create next match</h2>
-          
-        </div>
-
         <article class="create-card">
-          <h3>Match information</h3>
-          
+          <div class="section-title create-card-title">
+            <h2>Match information</h2>
+          </div>
 
           <div class="field">
             <label for="newTitle">Match title</label>
@@ -1529,7 +1576,7 @@
             </div>
             <div class="time-slot-picker" id="createTimeSlots" aria-label="Selected time options"></div>
             <input id="newTimes" type="hidden" value="" />
-            <div class="field-help">Add any time you want. Tap × to remove a time.</div>
+            <div class="field-help">5:00–6:00 PM is added by default. Use Add time for another option, or tap × to remove one.</div>
           </div>
           <button class="secondary" id="updateMatch">Create availability poll</button>
           <div class="feedback" id="manageFeedback" aria-live="polite"></div>
@@ -1616,7 +1663,6 @@
   <script src="./push-config.js"></script>
   <script>
     const players = [];
-    const minimumPlayers = 3;
 
     let currentSupabaseUser = null;
     let currentOwnedPlayerId = null;
@@ -1641,8 +1687,15 @@
     let availabilityResponses = {};
     let selectedAvailability = new Set();
     let selectedUnavailable = false;
+    let selectedAttendanceResponse = null;
     let selectedTeam = "A";
-    let createTimeOptions = [];
+    let createTimeOptions = [
+      "17:00",
+      "17:15",
+      "17:30",
+      "17:45",
+      "18:00"
+    ];
     let teamAName = "Team A";
     let teamBName = "Team B";
     let realtimeChannels = [];
@@ -1979,39 +2032,65 @@
         ? currentPlayer.name
         : "register first";
 
-      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName", "arrivalIdentityName", "plannedArrivalIdentityName"].forEach(id => {
+      [
+        "availabilityIdentityName",
+        "teamIdentityName",
+        "memoryIdentityName",
+        "arrivalIdentityName",
+        "plannedArrivalIdentityName"
+      ].forEach(id => {
         const element = document.getElementById(id);
         if (element) element.textContent = displayName;
       });
 
-      document.querySelectorAll(".commentIdentityName").forEach(element => {
-        element.textContent = commentName;
-      });
+      document
+        .querySelectorAll(".commentIdentityName")
+        .forEach(element => {
+          element.textContent = commentName;
+        });
 
       const hasProfile = Boolean(currentPlayer);
-      const canVoteAvailability =
-        hasProfile && activeMatch?.status === "voting";
+      const hasActiveMatch = Boolean(activeMatch);
       const canChooseTeam =
         hasProfile && activeMatch?.status === "confirmed";
 
+      selectedAttendanceResponse = currentPlayer
+        ? availabilityResponses[currentPlayer.id] || null
+        : null;
+
       document.getElementById("saveAvailability").disabled =
-        !canVoteAvailability;
+        !hasProfile || !hasActiveMatch;
       document.getElementById("saveVote").disabled =
         !canChooseTeam;
       document.getElementById("postMemory").disabled =
         !hasProfile || !memoryMatches.length;
 
-      document.querySelectorAll(".comment-button").forEach(button => {
-        button.disabled = !hasProfile;
-      });
+      document
+        .querySelectorAll(".comment-button")
+        .forEach(button => {
+          button.disabled = !hasProfile;
+        });
 
-      document.querySelectorAll(".team-pick").forEach(button => {
-        button.disabled = !canChooseTeam;
-        button.classList.toggle(
-          "active",
-          button.dataset.team === selectedTeam
-        );
-      });
+      document
+        .querySelectorAll(".team-pick")
+        .forEach(button => {
+          button.disabled = !canChooseTeam;
+          button.classList.toggle(
+            "active",
+            button.dataset.team === selectedTeam
+          );
+        });
+
+      document
+        .querySelectorAll("[data-attendance-response]")
+        .forEach(button => {
+          button.disabled = !hasProfile || !hasActiveMatch;
+          button.classList.toggle(
+            "active",
+            button.dataset.attendanceResponse ===
+              selectedAttendanceResponse
+          );
+        });
 
       const savedPlan = currentPlayer
         ? arrivalPlans.find(
@@ -2020,17 +2099,21 @@
         : null;
 
       selectedPlannedArrival = savedPlan
-        ? savedPlan.availability_status === "unavailable"
-          ? "unavailable"
-          : normalizeTime(savedPlan.expected_arrival_time)
+        ? normalizeTime(savedPlan.expected_arrival_time)
         : selectedPlannedArrival;
 
+      const canSaveArrival =
+        hasProfile &&
+        hasActiveMatch &&
+        selectedAttendanceResponse === "available";
+
       document.getElementById("savePlannedArrival").disabled =
-        !hasProfile || activeMatch?.status !== "confirmed";
+        !canSaveArrival;
 
       renderPlannedArrivalOptions();
 
-      const arrivedButton = document.getElementById("arrivedButton");
+      const arrivedButton =
+        document.getElementById("arrivedButton");
       const alreadyArrived = Boolean(currentPlayer?.arrivedAt);
       const canNotifyArrival =
         hasProfile &&
@@ -2043,22 +2126,9 @@
         ? "✅ Arrival Notified"
         : "📍 I’ve Arrived at the Field";
 
-      if (currentPlayer) {
-        selectedAvailability = new Set(
-          availabilityVotes[currentPlayer.id] || []
-        );
-        selectedUnavailable =
-          availabilityResponses[currentPlayer.id] === "unavailable";
-
-        if (currentPlayer.team) {
-          selectedTeam = currentPlayer.team;
-        }
-      } else {
-        selectedAvailability = new Set();
-        selectedUnavailable = false;
+      if (currentPlayer?.team) {
+        selectedTeam = currentPlayer.team;
       }
-
-      renderAvailabilityOptions();
     }
 
     async function createMemorySignedUrl(imagePath) {
@@ -2753,6 +2823,9 @@
           ? availabilityResponses[currentPlayer.id] ===
             "unavailable"
           : false;
+      selectedAttendanceResponse = currentPlayer
+        ? availabilityResponses[currentPlayer.id] || null
+        : null;
       selectedTeam = currentPlayer?.team || "A";
 
       const currentArrivalPlan = arrivalPlans.find(
@@ -2770,6 +2843,50 @@
       updateMatchUI();
     }
 
+    function calculateExpectedStartTime() {
+      const minutes = arrivalPlans
+        .filter(
+          plan =>
+            plan.availability_status !== "unavailable" &&
+            normalizeTime(plan.expected_arrival_time)
+        )
+        .map(plan => {
+          const [hour, minute] = normalizeTime(
+            plan.expected_arrival_time
+          ).split(":").map(Number);
+          return hour * 60 + minute;
+        });
+
+      if (!minutes.length) return null;
+
+      const average =
+        minutes.reduce((sum, value) => sum + value, 0) /
+        minutes.length;
+      const rounded = Math.round(average / 5) * 5;
+      const normalizedMinutes = rounded % (24 * 60);
+      const hour = Math.floor(normalizedMinutes / 60);
+      const minute = normalizedMinutes % 60;
+
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+
+    function updateParticipationSummary() {
+      const playingCount = Object.values(
+        availabilityResponses
+      ).filter(status => status === "available").length;
+      const unavailableCount = Object.values(
+        availabilityResponses
+      ).filter(status => status === "unavailable").length;
+      const expectedStart = calculateExpectedStartTime();
+
+      document.getElementById("voterCount").textContent =
+        playingCount;
+      document.getElementById("leadingTime").textContent =
+        expectedStart ? formatTime(expectedStart) : "—";
+      document.getElementById("leadingVotes").textContent =
+        unavailableCount;
+    }
+
     function updateMatchUI() {
       const matchTitle = document.getElementById("matchTitle");
       const matchStatus = document.getElementById("matchStatus");
@@ -2777,15 +2894,24 @@
         document.getElementById("matchOverline");
       const matchCreatorText =
         document.getElementById("matchCreatorText");
-      const fixedDateText = document.getElementById("fixedDateText");
-      const timeStateText = document.getElementById("timeStateText");
-      const preConfirmSummary = document.getElementById("preConfirmSummary");
-      const confirmedSummary = document.getElementById("confirmedSummary");
-      const joinConfirmedCard = document.getElementById("joinConfirmedCard");
-      const teamsCard = document.getElementById("teamsCard");
-      const arrivalCard = document.getElementById("arrivalCard");
+      const fixedDateText =
+        document.getElementById("fixedDateText");
+      const timeStateText =
+        document.getElementById("timeStateText");
+      const preConfirmSummary =
+        document.getElementById("preConfirmSummary");
+      const confirmedSummary =
+        document.getElementById("confirmedSummary");
+      const joinConfirmedCard =
+        document.getElementById("joinConfirmedCard");
+      const teamsCard =
+        document.getElementById("teamsCard");
+      const arrivalCard =
+        document.getElementById("arrivalCard");
       const plannedArrivalCard =
         document.getElementById("plannedArrivalCard");
+      const confirmButton =
+        document.getElementById("confirmMatchNow");
 
       if (!activeMatch) {
         matchOverline.textContent = "Selected match";
@@ -2795,23 +2921,18 @@
           "Created by a registered player";
         fixedDateText.textContent = "Create the next match";
         timeStateText.textContent =
-          "Open the Create tab to start a shared availability poll";
+          "Open the Create tab to create a match";
         preConfirmSummary.style.display = "block";
         confirmedSummary.style.display = "none";
         joinConfirmedCard.style.display = "none";
         teamsCard.style.display = "none";
         arrivalCard.style.display = "none";
         plannedArrivalCard.style.display = "none";
-        arrivalCard.style.display = "none";
+        confirmButton.style.display = "none";
 
-        document.getElementById("voterCount").textContent = "0";
-        document.getElementById("leadingTime").textContent = "—";
-        document.getElementById("leadingVotes").textContent = "0";
-        document.getElementById("timeResults").innerHTML = "";
-        document.getElementById("timeNotice").textContent =
-          "No active match is available yet.";
-
-        renderAvailabilityOptions();
+        availabilityResponses = {};
+        arrivalPlans = [];
+        updateParticipationSummary();
         renderTeams();
         renderPlannedArrivals();
         renderArrivals();
@@ -2823,6 +2944,9 @@
       const creator = players.find(
         player => player.ownerId === activeMatch.created_by
       );
+      const expectedStart = calculateExpectedStartTime();
+      const displayStart =
+        expectedStart || confirmedTime || timeOptions[0] || null;
 
       matchOverline.textContent =
         activeMatch.id === upcomingMatches[0]?.id
@@ -2833,38 +2957,51 @@
         `Created by ${creator?.name || "a registered player"}`;
       fixedDateText.textContent =
         formatMatchDate(activeMatch.match_date);
-      document.getElementById("teamALabel").textContent = teamAName;
-      document.getElementById("teamBLabel").textContent = teamBName;
-      document.getElementById("teamAHeading").textContent = teamAName;
-      document.getElementById("teamBHeading").textContent = teamBName;
-      document.getElementById("teamAPickName").textContent = teamAName;
-      document.getElementById("teamBPickName").textContent = teamBName;
+      document.getElementById("teamALabel").textContent =
+        teamAName;
+      document.getElementById("teamBLabel").textContent =
+        teamBName;
+      document.getElementById("teamAHeading").textContent =
+        teamAName;
+      document.getElementById("teamBHeading").textContent =
+        teamBName;
+      document.getElementById("teamAPickName").textContent =
+        teamAName;
+      document.getElementById("teamBPickName").textContent =
+        teamBName;
 
-      if (activeMatch.status === "confirmed" && confirmedTime) {
-        matchStatus.textContent = "Time confirmed";
-        timeStateText.textContent =
-          `${formatTime(confirmedTime)} confirmed`;
+      preConfirmSummary.style.display = "block";
+      plannedArrivalCard.style.display = "block";
+      updateParticipationSummary();
+
+      if (activeMatch.status === "confirmed") {
+        matchStatus.textContent = "Confirmed";
+        timeStateText.textContent = displayStart
+          ? `Expected start ${formatTime(displayStart)}`
+          : "Match confirmed";
         document.getElementById("confirmedTimeLabel").textContent =
-          `${formatTime(confirmedTime)} confirmed`;
-        preConfirmSummary.style.display = "none";
+          displayStart
+            ? `Expected start ${formatTime(displayStart)}`
+            : "Match confirmed";
         confirmedSummary.style.display = "block";
         joinConfirmedCard.style.display = "block";
         teamsCard.style.display = "block";
         arrivalCard.style.display = "block";
-        plannedArrivalCard.style.display = "block";
+        confirmButton.style.display = "none";
       } else {
-        matchStatus.textContent = "Time voting";
-        timeStateText.textContent =
-          "Choose every time you are available";
-        preConfirmSummary.style.display = "block";
+        matchStatus.textContent = "Open";
+        timeStateText.textContent = displayStart
+          ? `Expected start ${formatTime(displayStart)}`
+          : "Players choose Yes or No and expected arrival";
         confirmedSummary.style.display = "none";
         joinConfirmedCard.style.display = "none";
         teamsCard.style.display = "none";
+        arrivalCard.style.display = "none";
+        confirmButton.style.display =
+          isCurrentUserOrganizer() ? "block" : "none";
       }
 
       renderUpcomingMatches();
-      renderAvailabilityOptions();
-      renderTimeResults();
       renderTeams();
       renderPlannedArrivals();
       renderArrivals();
@@ -2872,249 +3009,34 @@
       updateAutomaticIdentityUI();
     }
 
-    function renderAvailabilityOptions() {
-      if (!activeMatch) {
-        availabilityOptions.innerHTML =
-          `<div class="notice" style="grid-column:1/-1">Choose or create an upcoming match first.</div>`;
-        return;
-      }
+    async function confirmMatchNow() {
+      const button =
+        document.getElementById("confirmMatchNow");
 
-      if (!timeOptions.length) {
-        availabilityOptions.innerHTML =
-          `<div class="notice" style="grid-column:1/-1">No time options were added to this match.</div>`;
-        return;
-      }
-
-      const canEdit =
-        Boolean(getCurrentPlayer()) &&
-        activeMatch.status === "voting";
-
-      const timeButtons = timeOptions.map(time => `
-        <button
-          type="button"
-          class="availability-option ${selectedAvailability.has(time) ? "active" : ""}"
-          data-time="${time}"
-          ${canEdit ? "" : "disabled"}
-        >
-          <strong>${formatTime(time)}</strong>
-          <span>${activeMatch.status === "voting" ? "Tap if available" : "Voting closed"}</span>
-        </button>
-      `).join("");
-
-      const unavailableButton = `
-        <button
-          type="button"
-          class="availability-option unavailable-option ${selectedUnavailable ? "active" : ""}"
-          data-unavailable="true"
-          ${canEdit ? "" : "disabled"}
-        >
-          <strong>Not available</strong>
-          <span>I cannot attend this match</span>
-        </button>
-      `;
-
-      availabilityOptions.innerHTML =
-        timeButtons + unavailableButton;
-
-      availabilityOptions
-        .querySelectorAll("[data-time]")
-        .forEach(button => {
-          button.addEventListener("click", () => {
-            const time = button.dataset.time;
-            selectedUnavailable = false;
-
-            if (selectedAvailability.has(time)) {
-              selectedAvailability.delete(time);
-            } else {
-              selectedAvailability.add(time);
-            }
-
-            renderAvailabilityOptions();
-          });
-        });
-
-      availabilityOptions
-        .querySelector("[data-unavailable]")
-        ?.addEventListener("click", () => {
-          selectedUnavailable = !selectedUnavailable;
-
-          if (selectedUnavailable) {
-            selectedAvailability.clear();
-          }
-
-          renderAvailabilityOptions();
-        });
-    }
-
-    function renderTimeResults() {
-      if (!activeMatch || !activeTimeOptions.length) {
-        document.getElementById("timeResults").innerHTML = "";
-        return;
-      }
-
-      const respondentIds =
-        Object.keys(availabilityResponses);
-      const availableVoterIds =
-        Object.keys(availabilityVotes);
-      const unavailableIds = respondentIds.filter(
-        playerId =>
-          availabilityResponses[playerId] ===
-          "unavailable"
-      );
-
-      const counts = activeTimeOptions.map(option => {
-        const time = normalizeTime(option.start_time);
-        const availableIds = availableVoterIds.filter(
-          playerId =>
-            (availabilityVotes[playerId] || []).includes(time)
-        );
-
-        return {
-          optionId: option.id,
-          time,
-          availableIds
-        };
-      });
-
-      const maxVotes = Math.max(
-        0,
-        ...counts.map(item => item.availableIds.length)
-      );
-      const leading = counts.find(
-        item =>
-          item.availableIds.length === maxVotes &&
-          maxVotes > 0
-      );
-
-      document.getElementById("voterCount").textContent =
-        respondentIds.length;
-      document.getElementById("leadingTime").textContent =
-        leading ? formatTime(leading.time) : "—";
-      document.getElementById("leadingVotes").textContent =
-        leading ? leading.availableIds.length : "0";
-
-      const organizer = isCurrentUserOrganizer();
-
-      const timeMarkup = counts.map(item => {
-        const names = item.availableIds
-          .map(id =>
-            players.find(player => player.id === id)?.name
-          )
-          .filter(Boolean);
-        const reached =
-          item.availableIds.length >= minimumPlayers;
-        const isLeading =
-          leading && item.optionId === leading.optionId;
-        const canConfirm =
-          reached &&
-          activeMatch.status === "voting" &&
-          organizer;
-
-        return `
-          <div class="time-result ${reached ? "reached" : ""} ${isLeading ? "leading" : ""}">
-            <div class="time-result-head">
-              <strong>${formatTime(item.time)}</strong>
-              <span class="time-result-count">${item.availableIds.length} available</span>
-            </div>
-            <div class="time-result-names">
-              ${names.length
-                ? names.map(escapeHtml).join(", ")
-                : "No players yet"}
-            </div>
-            ${canConfirm
-              ? `<button type="button" class="confirm-time" data-option-id="${item.optionId}">Confirm ${formatTime(item.time)}</button>`
-              : ""}
-          </div>
-        `;
-      }).join("");
-
-      const unavailableNames = unavailableIds
-        .map(id =>
-          players.find(player => player.id === id)?.name
-        )
-        .filter(Boolean);
-
-      const unavailableMarkup = `
-        <div class="time-result unavailable-result">
-          <div class="time-result-head">
-            <strong>Not available</strong>
-            <span class="time-result-count">${unavailableIds.length} players</span>
-          </div>
-          <div class="time-result-names">
-            ${unavailableNames.length
-              ? unavailableNames.map(escapeHtml).join(", ")
-              : "Nobody selected this"}
-          </div>
-        </div>
-      `;
-
-      document.getElementById("timeResults").innerHTML =
-        timeMarkup + unavailableMarkup;
-
-      document
-        .querySelectorAll("[data-option-id]")
-        .forEach(button => {
-          button.addEventListener("click", () =>
-            confirmMatchTime(button.dataset.optionId)
-          );
-        });
-
-      const reachedOptions = counts.filter(
-        item => item.availableIds.length >= minimumPlayers
-      );
-      const notice = document.getElementById("timeNotice");
-      const unavailableText = unavailableIds.length
-        ? ` ${unavailableIds.length} ${unavailableIds.length === 1 ? "player is" : "players are"} not available.`
-        : "";
-
-      if (activeMatch.status === "confirmed" && confirmedTime) {
-        notice.textContent =
-          `${formatTime(confirmedTime)} is confirmed. Any registered player can now choose a team.${unavailableText}`;
-      } else if (reachedOptions.length && organizer) {
-        notice.textContent =
-          `The minimum has been reached. As match creator, choose the final time above.${unavailableText}`;
-      } else if (reachedOptions.length) {
-        notice.textContent =
-          `The minimum has been reached. Waiting for the match creator to confirm the final time.${unavailableText}`;
-      } else if (organizer) {
-        notice.textContent =
-          `You created this match. A time needs at least ${minimumPlayers} players before you can confirm it.${unavailableText}`;
-      } else {
-        notice.textContent =
-          `No time has reached the minimum of ${minimumPlayers} players yet.${unavailableText}`;
-      }
-    }
-
-    async function confirmMatchTime(optionId) {
-      const notice = document.getElementById("timeNotice");
-
-      if (!activeMatch) {
-        notice.textContent = "No active match is available.";
-        return;
-      }
+      if (!activeMatch) return;
 
       if (!isCurrentUserOrganizer()) {
-        notice.textContent =
-          "Only the friend who created this match can confirm its time.";
+        document.getElementById("availabilityFeedback").textContent =
+          "Only the match creator can confirm this match.";
         return;
       }
 
-      document
-        .querySelectorAll(".confirm-time")
-        .forEach(button => {
-          button.disabled = true;
-        });
+      const expectedStart = calculateExpectedStartTime();
+      const startTime =
+        expectedStart || timeOptions[0] || "17:00";
 
-      notice.textContent = "Confirming the match time…";
+      button.disabled = true;
+      button.textContent = "Confirming…";
 
       try {
-        const { error } = await window.db.rpc(
-          "confirm_match_time",
-          {
-            p_match_id: activeMatch.id,
-            p_time_option_id: optionId
-          }
-        );
+        const { error } = await window.db
+          .from("matches")
+          .update({
+            status: "confirmed",
+            confirmed_time: startTime
+          })
+          .eq("id", activeMatch.id)
+          .eq("created_by", currentSupabaseUser.id);
 
         if (error) throw error;
 
@@ -3123,13 +3045,14 @@
           "time_confirmed",
           activeMatch.id
         );
-        notice.textContent =
-          `${formatTime(confirmedTime)} is now confirmed for everyone.`;
+        showArrivalToast("✅ Match confirmed");
       } catch (error) {
-        console.error("Could not confirm match time:", error);
-        notice.textContent =
-          error.message || "Could not confirm the match time.";
-        renderTimeResults();
+        console.error("Could not confirm match:", error);
+        document.getElementById("availabilityFeedback").textContent =
+          error.message || "Could not confirm this match.";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Confirm match now";
       }
     }
 
@@ -3172,9 +3095,9 @@
       const notice = document.getElementById("teamNotice");
 
       if (!activeMatch || activeMatch.status !== "confirmed") {
-        balance.textContent = "Waiting for time";
+        balance.textContent = "Waiting for confirmation";
         notice.textContent =
-          "Teams will appear after the match time is confirmed.";
+          "Teams will appear after the match is confirmed.";
       } else if (difference === 0) {
         balance.textContent = "Balanced teams";
         notice.textContent =
@@ -3193,41 +3116,30 @@
     function renderPlannedArrivalOptions() {
       if (!plannedArrivalOptions) return;
 
-      if (!activeMatch || activeMatch.status !== "confirmed") {
+      if (!activeMatch) {
         plannedArrivalOptions.innerHTML =
-          `<div class="notice" style="grid-column:1/-1">The match time must be confirmed first.</div>`;
+          `<div class="notice" style="grid-column:1/-1">Choose or create a match first.</div>`;
         return;
       }
 
       const currentPlayer = getCurrentPlayer();
-      const canChoose = Boolean(currentPlayer);
+      const canChoose =
+        Boolean(currentPlayer) &&
+        availabilityResponses[currentPlayer.id] === "available";
 
-      const timeButtons = timeOptions.map(time => `
-        <button
-          type="button"
-          class="availability-option ${selectedPlannedArrival === time ? "active" : ""}"
-          data-planned-arrival-time="${time}"
-          ${canChoose ? "" : "disabled"}
-        >
-          <strong>${formatTime(time)}</strong>
-          <span>Expected arrival</span>
-        </button>
-      `).join("");
-
-      const unavailableButton = `
-        <button
-          type="button"
-          class="availability-option unavailable-option ${selectedPlannedArrival === "unavailable" ? "active" : ""}"
-          data-planned-arrival-unavailable="true"
-          ${canChoose ? "" : "disabled"}
-        >
-          <strong>Not available</strong>
-          <span>I will not attend this match</span>
-        </button>
-      `;
-
-      plannedArrivalOptions.innerHTML =
-        timeButtons + unavailableButton;
+      plannedArrivalOptions.innerHTML = timeOptions.length
+        ? timeOptions.map(time => `
+          <button
+            type="button"
+            class="availability-option ${selectedPlannedArrival === time ? "active" : ""}"
+            data-planned-arrival-time="${time}"
+            ${canChoose ? "" : "disabled"}
+          >
+            <strong>${formatTime(time)}</strong>
+            <span>Expected arrival</span>
+          </button>
+        `).join("")
+        : `<div class="notice" style="grid-column:1/-1">No arrival time options were added.</div>`;
 
       plannedArrivalOptions
         .querySelectorAll("[data-planned-arrival-time]")
@@ -3238,13 +3150,6 @@
             renderPlannedArrivalOptions();
           });
         });
-
-      plannedArrivalOptions
-        .querySelector("[data-planned-arrival-unavailable]")
-        ?.addEventListener("click", () => {
-          selectedPlannedArrival = "unavailable";
-          renderPlannedArrivalOptions();
-        });
     }
 
     function renderPlannedArrivals() {
@@ -3254,13 +3159,14 @@
         document.getElementById("plannedArrivalCount");
       const currentPlayer = getCurrentPlayer();
 
-      if (!activeMatch || activeMatch.status !== "confirmed") {
+      if (!activeMatch) {
         list.innerHTML = "";
         count.textContent = "0 responses";
         return;
       }
 
       const visiblePlans = arrivalPlans
+        .filter(plan => plan.availability_status !== "unavailable")
         .map(plan => ({
           ...plan,
           player: players.find(
@@ -3334,23 +3240,26 @@
         return;
       }
 
+      if (!activeMatch) {
+        feedback.textContent =
+          "Choose or create a match first.";
+        return;
+      }
+
       if (
-        !activeMatch ||
-        activeMatch.status !== "confirmed"
+        availabilityResponses[player.id] !==
+        "available"
       ) {
         feedback.textContent =
-          "The match time must be confirmed first.";
+          "Choose Yes, I will play first.";
         return;
       }
 
       if (!selectedPlannedArrival) {
         feedback.textContent =
-          "Choose an arrival time or select Not available.";
+          "Choose when you expect to arrive.";
         return;
       }
-
-      const unavailable =
-        selectedPlannedArrival === "unavailable";
 
       button.disabled = true;
       button.textContent = "Saving…";
@@ -3364,12 +3273,9 @@
               match_id: activeMatch.id,
               player_id: player.id,
               created_by: currentSupabaseUser.id,
-              expected_arrival_time: unavailable
-                ? null
-                : selectedPlannedArrival,
-              availability_status: unavailable
-                ? "unavailable"
-                : "coming",
+              expected_arrival_time:
+                selectedPlannedArrival,
+              availability_status: "coming",
               updated_at: new Date().toISOString()
             },
             {
@@ -3381,9 +3287,8 @@
 
         await loadActiveMatchFromSupabase();
 
-        feedback.textContent = unavailable
-          ? `${player.name} is marked as not available for this match.`
-          : `${player.name} plans to arrive at ${formatTime(selectedPlannedArrival)}. Everyone can now see it.`;
+        feedback.textContent =
+          `${player.name} plans to arrive at ${formatTime(selectedPlannedArrival)}. The expected start average has been updated.`;
       } catch (error) {
         console.error(
           "Could not save planned arrival:",
@@ -3393,7 +3298,7 @@
           error.message ||
           "Could not save your arrival response.";
       } finally {
-        button.textContent = "Save my arrival time";
+        button.textContent = "Save expected arrival";
         updateAutomaticIdentityUI();
       }
     }
@@ -3476,7 +3381,7 @@
         activeMatch.status !== "confirmed"
       ) {
         feedback.textContent =
-          "The match time must be confirmed first.";
+          "The match must be confirmed first.";
         return;
       }
 
@@ -3534,7 +3439,15 @@
     }
 
     function updateCountdown() {
-      if (!activeMatch || !confirmedTime) {
+      const expectedStart = calculateExpectedStartTime();
+      const displayStart =
+        expectedStart || confirmedTime || timeOptions[0];
+
+      if (
+        !activeMatch ||
+        activeMatch.status !== "confirmed" ||
+        !displayStart
+      ) {
         ["days", "hours", "minutes", "seconds"].forEach(id => {
           const element = document.getElementById(id);
           if (element) element.textContent = "00";
@@ -3543,7 +3456,7 @@
       }
 
       const matchDate = new Date(
-        `${activeMatch.match_date}T${confirmedTime}:00+07:00`
+        `${activeMatch.match_date}T${displayStart}:00+07:00`
       );
       const distance = Math.max(
         0,
@@ -3579,59 +3492,23 @@
         return;
       }
 
-      if (!activeMatch || activeMatch.status !== "voting") {
+      if (!activeMatch) {
         feedback.textContent =
-          "There is no open availability poll.";
+          "Choose or create a match first.";
         return;
       }
 
-      if (
-        !selectedUnavailable &&
-        selectedAvailability.size === 0
-      ) {
+      if (!selectedAttendanceResponse) {
         feedback.textContent =
-          "Choose at least one time or select Not available.";
+          "Choose Yes, I will play or No, not available.";
         return;
       }
-
-      const allOptionIds = activeTimeOptions.map(
-        option => option.id
-      );
-      const selectedOptionIds = selectedUnavailable
-        ? []
-        : [...selectedAvailability]
-            .map(time => getActiveOptionByTime(time)?.id)
-            .filter(Boolean);
 
       saveButton.disabled = true;
       saveButton.textContent = "Saving…";
       feedback.textContent = "";
 
       try {
-        if (allOptionIds.length) {
-          const { error: deleteError } = await window.db
-            .from("availability_votes")
-            .delete()
-            .in("time_option_id", allOptionIds)
-            .eq("player_id", player.id);
-
-          if (deleteError) throw deleteError;
-        }
-
-        if (selectedOptionIds.length) {
-          const rows = selectedOptionIds.map(optionId => ({
-            time_option_id: optionId,
-            player_id: player.id,
-            created_by: currentSupabaseUser.id
-          }));
-
-          const { error: insertError } = await window.db
-            .from("availability_votes")
-            .insert(rows);
-
-          if (insertError) throw insertError;
-        }
-
         const { error: responseError } = await window.db
           .from("match_availability_responses")
           .upsert(
@@ -3639,9 +3516,7 @@
               match_id: activeMatch.id,
               player_id: player.id,
               created_by: currentSupabaseUser.id,
-              response_status: selectedUnavailable
-                ? "unavailable"
-                : "available",
+              response_status: selectedAttendanceResponse,
               updated_at: new Date().toISOString()
             },
             {
@@ -3651,17 +3526,34 @@
 
         if (responseError) throw responseError;
 
+        if (selectedAttendanceResponse === "unavailable") {
+          const existingPlan = arrivalPlans.find(
+            plan => plan.player_id === player.id
+          );
+
+          if (existingPlan) {
+            const { error: deletePlanError } = await window.db
+              .from("match_arrival_plans")
+              .delete()
+              .eq("match_id", activeMatch.id)
+              .eq("player_id", player.id);
+
+            if (deletePlanError) throw deletePlanError;
+          }
+        }
+
         await loadActiveMatchFromSupabase();
 
-        feedback.textContent = selectedUnavailable
-          ? `${player.name} is marked as not available for this match.`
-          : `${player.name}'s available times are saved for everyone.`;
-      } catch (error) {
-        console.error("Could not save availability:", error);
         feedback.textContent =
-          error.message || "Could not save availability.";
+          selectedAttendanceResponse === "available"
+            ? `${player.name} will play. Now choose an expected arrival time below.`
+            : `${player.name} is marked as not available.`;
+      } catch (error) {
+        console.error("Could not save response:", error);
+        feedback.textContent =
+          error.message || "Could not save your response.";
       } finally {
-        saveButton.textContent = "Save my availability";
+        saveButton.textContent = "Save my response";
         updateAutomaticIdentityUI();
       }
     }
@@ -3679,11 +3571,10 @@
 
       if (
         !activeMatch ||
-        activeMatch.status !== "confirmed" ||
-        !confirmedTime
+        activeMatch.status !== "confirmed"
       ) {
         feedback.textContent =
-          "The match time must be confirmed first.";
+          "The match must be confirmed first.";
         return;
       }
 
@@ -3958,9 +3849,12 @@ Open the group board:
 ${window.location.href}`;
       }
 
-      const timeText = confirmedTime
-        ? formatTime(confirmedTime)
-        : "Time voting is still open";
+      const expectedStart = calculateExpectedStartTime();
+      const timeText = expectedStart
+        ? `Expected start ${formatTime(expectedStart)}`
+        : activeMatch.status === "confirmed"
+          ? "Match confirmed"
+          : "Players are sharing expected arrival times";
       const pageUrl =
         location.protocol === "http:" ||
         location.protocol === "https:"
@@ -5074,10 +4968,34 @@ ${pageUrl}`;
         });
       });
 
+    document
+      .querySelectorAll("[data-attendance-response]")
+      .forEach(button => {
+        button.addEventListener("click", () => {
+          selectedAttendanceResponse =
+            button.dataset.attendanceResponse;
+
+          document
+            .querySelectorAll("[data-attendance-response]")
+            .forEach(choice => {
+              choice.classList.toggle(
+                "active",
+                choice === button
+              );
+            });
+        });
+      });
+
     document.getElementById("saveAvailability")
       .addEventListener(
         "click",
         saveAvailabilityToSupabase
+      );
+
+    document.getElementById("confirmMatchNow")
+      .addEventListener(
+        "click",
+        confirmMatchNow
       );
 
     document.getElementById("saveVote")
@@ -5312,7 +5230,7 @@ ${pageUrl}`;
             "Could not open the selected match:",
             error
           );
-          document.getElementById("timeNotice").textContent =
+          document.getElementById("availabilityFeedback").textContent =
             error.message ||
             "Could not open this match.";
         }
@@ -5401,7 +5319,13 @@ ${pageUrl}`;
         document.getElementById("newDate");
 
       dateInput.value = getNextSundayBangkok();
-      createTimeOptions = [];
+      createTimeOptions = [
+        "17:00",
+        "17:15",
+        "17:30",
+        "17:45",
+        "18:00"
+      ];
       document.getElementById("newTimeInput").value = "";
       renderCreateTimeOptions();
       updateHeroForScreen("homeScreen");
@@ -5540,7 +5464,7 @@ ${pageUrl}`;
         document.getElementById("profileState")
           .textContent =
             error.message || "Could not connect to Supabase.";
-        document.getElementById("timeNotice")
+        document.getElementById("availabilityFeedback")
           .textContent =
             "Could not load the shared match. Check the browser console.";
       }
