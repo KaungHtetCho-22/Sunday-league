@@ -1006,13 +1006,13 @@
       <section class="screen" id="playersScreen">
         <div class="page-heading">
           <h2>Our players</h2>
-          <p>Each registered friend can update their own profile. Weekly team assignments are shown only inside the current match.</p>
+          <p>Claim your registered profile once, then update your name, photo, shirt number, position, and description.</p>
         </div>
 
         <article class="section-card">
           <div class="section-title">
-            <h2>Edit your profile</h2>
-            <span>Local UI demo</span>
+            <h2>Your player profile</h2>
+            <span id="profileConnectionStatus">Connecting…</span>
           </div>
 
           <div class="field">
@@ -1022,6 +1022,14 @@
             </select>
           </div>
 
+          <div class="notice" id="profileClaimState">
+            Connecting to Supabase…
+          </div>
+
+          <button class="primary" id="claimProfile" type="button" style="display:none">
+            Claim My Profile
+          </button>
+
           <div id="profileEditor" style="display:none">
             <div class="field">
               <label for="profileImage">Profile image</label>
@@ -1029,7 +1037,11 @@
             </div>
 
             <div id="profilePreviewWrap" style="margin-top:12px;display:none">
-              <img id="profilePreview" alt="Selected profile preview" style="width:92px;height:92px;object-fit:cover;border-radius:22px;border:1px solid var(--line)" />
+              <img
+                id="profilePreview"
+                alt="Selected profile preview"
+                style="width:92px;height:92px;object-fit:cover;border-radius:22px;border:1px solid var(--line)"
+              />
             </div>
 
             <div class="field">
@@ -1055,10 +1067,14 @@
 
             <div class="field">
               <label for="profileDescription">About you</label>
-              <textarea id="profileDescription" maxlength="160" placeholder="Write a short football description about yourself"></textarea>
+              <textarea
+                id="profileDescription"
+                maxlength="160"
+                placeholder="Write a short football description about yourself"
+              ></textarea>
             </div>
 
-            <button class="primary" id="saveProfile">Save my profile</button>
+            <button class="primary" id="saveProfile" type="button">Save My Profile</button>
             <div class="feedback" id="profileFeedback" aria-live="polite"></div>
           </div>
         </article>
@@ -1205,6 +1221,7 @@
       </div>
     </div>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabase-client.js"></script>
   <script>
@@ -1228,6 +1245,10 @@
     let teamAName = "Team A";
     let teamBName = "Team B";
     let selectedMemoryDataUrl = "";
+    let currentSupabaseUser = null;
+    let currentOwnedPlayerId = null;
+    let pendingProfileFile = null;
+
 
     const playerSelect = document.getElementById("playerSelect");
     const memoryName = document.getElementById("memoryName");
@@ -1258,6 +1279,184 @@
 
     function initials(name) {
       return name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[character]);
+    }
+
+    function replaceSelectOptions(select, placeholder, detailed = false) {
+      if (!select) return;
+      select.innerHTML = "";
+
+      const firstOption = document.createElement("option");
+      firstOption.value = "";
+      firstOption.textContent = placeholder;
+      select.appendChild(firstOption);
+
+      players.forEach(player => {
+        const option = document.createElement("option");
+        option.value = player.id;
+        option.textContent = detailed
+          ? `${player.name} · ${player.role}`
+          : player.name;
+        select.appendChild(option);
+      });
+    }
+
+    function repopulateAllPlayerSelects() {
+      replaceSelectOptions(playerSelect, "Select player", true);
+      replaceSelectOptions(memoryName, "Select player", true);
+      replaceSelectOptions(
+        document.getElementById("availabilityPlayerSelect"),
+        "Select player"
+      );
+      replaceSelectOptions(
+        document.getElementById("profilePlayerSelect"),
+        "Select player"
+      );
+
+      document.querySelectorAll(".commenter-select").forEach(select => {
+        replaceSelectOptions(select, "Comment as...");
+      });
+    }
+
+    async function createAvatarSignedUrl(imagePath) {
+      if (!imagePath) return null;
+
+      const { data, error } = await window.db.storage
+        .from("avatars")
+        .createSignedUrl(imagePath, 60 * 60);
+
+      if (error) {
+        console.warn("Could not create avatar URL:", error);
+        return null;
+      }
+
+      return data.signedUrl;
+    }
+
+    async function loadRegisteredPlayersFromSupabase() {
+      currentSupabaseUser = await window.supabaseReady;
+
+      const { data, error } = await window.db
+        .from("players")
+        .select(
+          "id, owner_id, name, shirt_number, position, description, image_path"
+        )
+        .order("name");
+
+      if (error) throw error;
+
+      const mappedPlayers = await Promise.all(
+        data.map(async row => ({
+          id: row.id,
+          ownerId: row.owner_id,
+          name: row.name,
+          role: row.position || "Anywhere",
+          number: row.shirt_number,
+          note: row.description || "",
+          imagePath: row.image_path,
+          photo: await createAvatarSignedUrl(row.image_path),
+          team: null,
+          status: "maybe"
+        }))
+      );
+
+      players.splice(0, players.length, ...mappedPlayers);
+      currentOwnedPlayerId =
+        players.find(player => player.ownerId === currentSupabaseUser.id)?.id ||
+        null;
+
+      repopulateAllPlayerSelects();
+      renderProfiles();
+      renderTeams();
+
+      const profileSelect = document.getElementById("profilePlayerSelect");
+      if (currentOwnedPlayerId) {
+        profileSelect.value = currentOwnedPlayerId;
+      }
+
+      updateProfileClaimState();
+      document.getElementById("profileConnectionStatus").textContent =
+        "Supabase connected";
+    }
+
+    function fillProfileEditor(player) {
+      profileName.value = player.name || "";
+      profileNumber.value = player.number ?? "";
+      profilePosition.value = player.role || "Anywhere";
+      profileDescription.value = player.note || "";
+      pendingProfileFile = null;
+      profileImage.value = "";
+
+      if (player.photo) {
+        profilePreview.src = player.photo;
+        profilePreviewWrap.style.display = "block";
+      } else {
+        profilePreview.removeAttribute("src");
+        profilePreviewWrap.style.display = "none";
+      }
+    }
+
+    function updateProfileClaimState() {
+      const playerId = profilePlayerSelect.value;
+      const player = players.find(item => item.id === playerId);
+      const claimButton = document.getElementById("claimProfile");
+      const claimState = document.getElementById("profileClaimState");
+      const feedback = document.getElementById("profileFeedback");
+
+      claimButton.style.display = "none";
+      profileEditor.style.display = "none";
+      feedback.textContent = "";
+
+      if (!currentSupabaseUser) {
+        claimState.textContent = "Connecting to Supabase…";
+        return;
+      }
+
+      if (!player) {
+        if (currentOwnedPlayerId) {
+          const owned = players.find(item => item.id === currentOwnedPlayerId);
+          claimState.textContent =
+            `This browser owns ${owned?.name || "a player"}'s profile.`;
+        } else {
+          claimState.textContent =
+            "Choose your registered name. You can claim one profile on this browser.";
+        }
+        return;
+      }
+
+      if (player.ownerId === currentSupabaseUser.id) {
+        claimState.textContent =
+          "This is your profile. Your changes and avatar will be saved permanently.";
+        profileEditor.style.display = "block";
+        fillProfileEditor(player);
+        return;
+      }
+
+      if (player.ownerId) {
+        claimState.textContent =
+          "This profile has already been claimed on another browser or device.";
+        return;
+      }
+
+      if (currentOwnedPlayerId) {
+        const owned = players.find(item => item.id === currentOwnedPlayerId);
+        claimState.textContent =
+          `This browser already owns ${owned?.name || "another player"}'s profile.`;
+        return;
+      }
+
+      claimState.textContent =
+        `Claim ${player.name}'s profile only if this is you.`;
+      claimButton.style.display = "block";
     }
 
     function renderTeams() {
@@ -1297,13 +1496,14 @@
       document.getElementById("playerProfiles").innerHTML = players.map((p, index) => `
         <article class="profile-card">
           ${p.photo
-            ? `<img class="profile-photo" src="${p.photo}" alt="${p.name} profile photo" style="object-fit:cover">`
+            ? `<img class="profile-photo" src="${p.photo}" alt="${escapeHtml(p.name)} profile photo" style="object-fit:cover">`
             : `<div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(p.name)}</div>`}
           <div class="profile-content">
-            <h3>${p.name} · No. ${p.number}</h3>
-            <p>${p.note}</p>
+            <h3>${escapeHtml(p.name)} · No. ${p.number ?? "—"}</h3>
+            <p>${escapeHtml(p.note || "No description yet.")}</p>
             <div class="tags">
-              <span class="tag">${p.role}</span>
+              <span class="tag">${escapeHtml(p.role || "Anywhere")}</span>
+              <span class="tag">${p.ownerId ? "Claimed" : "Unclaimed"}</span>
             </div>
           </div>
         </article>
@@ -1689,37 +1889,58 @@ ${pageUrl}`;
     const profilePreviewWrap = document.getElementById("profilePreviewWrap");
     let pendingProfileImage = null;
 
-    players.forEach(player => {
-      const option = document.createElement("option");
-      option.value = player.id;
-      option.textContent = player.name;
-      profilePlayerSelect.appendChild(option);
-    });
+    profilePlayerSelect.addEventListener("change", updateProfileClaimState);
 
-    profilePlayerSelect.addEventListener("change", () => {
-      const player = players.find(p => p.id === profilePlayerSelect.value);
-      const feedback = document.getElementById("profileFeedback");
-      feedback.textContent = "";
-      pendingProfileImage = null;
-      profileImage.value = "";
+    document.getElementById("claimProfile").addEventListener("click", async () => {
+      const player = players.find(item => item.id === profilePlayerSelect.value);
+      const claimState = document.getElementById("profileClaimState");
 
-      if (!player) {
-        profileEditor.style.display = "none";
+      if (!player || !currentSupabaseUser) {
+        claimState.textContent = "Choose your registered profile first.";
         return;
       }
 
-      profileEditor.style.display = "block";
-      profileName.value = player.name;
-      profileNumber.value = player.number;
-      profilePosition.value = player.role;
-      profileDescription.value = player.note;
+      if (currentOwnedPlayerId) {
+        claimState.textContent =
+          "This browser has already claimed a player profile.";
+        return;
+      }
 
-      if (player.photo) {
-        profilePreview.src = player.photo;
-        profilePreviewWrap.style.display = "block";
-      } else {
-        profilePreview.removeAttribute("src");
-        profilePreviewWrap.style.display = "none";
+      const claimButton = document.getElementById("claimProfile");
+      claimButton.disabled = true;
+      claimButton.textContent = "Claiming…";
+
+      try {
+        const { data, error } = await window.db
+          .from("players")
+          .update({ owner_id: currentSupabaseUser.id })
+          .eq("id", player.id)
+          .is("owner_id", null)
+          .select(
+            "id, owner_id, name, shirt_number, position, description, image_path"
+          )
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (!data) {
+          claimState.textContent =
+            "This profile was already claimed. Refreshing player information…";
+          await loadRegisteredPlayersFromSupabase();
+          return;
+        }
+
+        player.ownerId = data.owner_id;
+        currentOwnedPlayerId = player.id;
+        renderProfiles();
+        updateProfileClaimState();
+      } catch (error) {
+        console.error("Profile claim failed:", error);
+        claimState.textContent =
+          error.message || "Could not claim this profile.";
+      } finally {
+        claimButton.disabled = false;
+        claimButton.textContent = "Claim My Profile";
       }
     });
 
@@ -1728,33 +1949,43 @@ ${pageUrl}`;
       const feedback = document.getElementById("profileFeedback");
 
       if (!file) return;
+
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         feedback.textContent = "Choose a JPEG, PNG, or WebP image.";
         profileImage.value = "";
         return;
       }
+
       if (file.size > 5 * 1024 * 1024) {
         feedback.textContent = "Image must be smaller than 5 MB.";
         profileImage.value = "";
         return;
       }
 
+      pendingProfileFile = file;
+
       const reader = new FileReader();
       reader.onload = () => {
         pendingProfileImage = reader.result;
         profilePreview.src = pendingProfileImage;
         profilePreviewWrap.style.display = "block";
-        feedback.textContent = "Image selected. Save your profile to apply it.";
+        feedback.textContent =
+          "Image selected. Save your profile to upload it.";
       };
       reader.readAsDataURL(file);
     });
 
-    document.getElementById("saveProfile").addEventListener("click", () => {
-      const player = players.find(p => p.id === profilePlayerSelect.value);
+    document.getElementById("saveProfile").addEventListener("click", async () => {
+      const player = players.find(item => item.id === profilePlayerSelect.value);
       const feedback = document.getElementById("profileFeedback");
+      const saveButton = document.getElementById("saveProfile");
 
-      if (!player) {
-        feedback.textContent = "Choose your registered profile first.";
+      if (
+        !player ||
+        !currentSupabaseUser ||
+        player.ownerId !== currentSupabaseUser.id
+      ) {
+        feedback.textContent = "You can edit only your claimed profile.";
         return;
       }
 
@@ -1766,31 +1997,87 @@ ${pageUrl}`;
         feedback.textContent = "Enter your name.";
         return;
       }
+
       if (!Number.isInteger(number) || number < 0 || number > 99) {
         feedback.textContent = "Choose a shirt number from 0 to 99.";
         return;
       }
+
       if (!newDescription) {
         feedback.textContent = "Write a short description about yourself.";
         return;
       }
 
-      player.name = newName;
-      player.number = number;
-      player.role = profilePosition.value;
-      player.note = newDescription;
-      if (pendingProfileImage) player.photo = pendingProfileImage;
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving…";
+      feedback.textContent = "";
 
-      const mainOption = [...playerSelect.options].find(option => option.value === player.id);
-      if (mainOption) mainOption.textContent = `${player.name} · ${player.role}`;
+      try {
+        let imagePath = player.imagePath || null;
+        let signedAvatarUrl = player.photo || null;
 
-      const profileOption = [...profilePlayerSelect.options].find(option => option.value === player.id);
-      if (profileOption) profileOption.textContent = player.name;
+        if (pendingProfileFile) {
+          const extension =
+            pendingProfileFile.name.split(".").pop()?.toLowerCase() || "jpg";
+          imagePath =
+            `${currentSupabaseUser.id}/avatar-${Date.now()}.${extension}`;
 
-      renderTeams();
-      renderProfiles();
-      feedback.textContent = "Your profile has been updated on this device.";
-      pendingProfileImage = null;
+          const { error: uploadError } = await window.db.storage
+            .from("avatars")
+            .upload(imagePath, pendingProfileFile, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: pendingProfileFile.type
+            });
+
+          if (uploadError) throw uploadError;
+          signedAvatarUrl = await createAvatarSignedUrl(imagePath);
+        }
+
+        const { data, error } = await window.db
+          .from("players")
+          .update({
+            name: newName,
+            shirt_number: number,
+            position: profilePosition.value,
+            description: newDescription,
+            image_path: imagePath
+          })
+          .eq("id", player.id)
+          .eq("owner_id", currentSupabaseUser.id)
+          .select(
+            "id, owner_id, name, shirt_number, position, description, image_path"
+          )
+          .single();
+
+        if (error) throw error;
+
+        player.name = data.name;
+        player.number = data.shirt_number;
+        player.role = data.position;
+        player.note = data.description;
+        player.imagePath = data.image_path;
+        player.photo = signedAvatarUrl;
+
+        pendingProfileFile = null;
+        pendingProfileImage = null;
+
+        repopulateAllPlayerSelects();
+        profilePlayerSelect.value = player.id;
+        renderTeams();
+        renderProfiles();
+        updateProfileClaimState();
+
+        feedback.textContent =
+          "Your profile and avatar were saved permanently.";
+      } catch (error) {
+        console.error("Profile save failed:", error);
+        feedback.textContent =
+          error.message || "Could not save your profile.";
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = "Save My Profile";
+      }
     });
 
     renderTeams();
@@ -1800,18 +2087,13 @@ ${pageUrl}`;
     document.getElementById("teamsCard").style.display = confirmedTime ? "block" : "none";
     setInterval(updateCountdown, 1000);
 
-    window.addEventListener("DOMContentLoaded", async () => {
-      try {
-        const players = await window.testSupabaseConnection();
-
-        console.log(
-          `Connected successfully. Loaded ${players.length} players.`
-        );
-      } catch (error) {
-        console.error("Supabase setup error:", error);
-      }
+    loadRegisteredPlayersFromSupabase().catch(error => {
+      console.error("Could not load registered players:", error);
+      document.getElementById("profileConnectionStatus").textContent =
+        "Connection failed";
+      document.getElementById("profileClaimState").textContent =
+        error.message || "Could not connect to Supabase.";
     });
-
   </script>
 </body>
 </html>
