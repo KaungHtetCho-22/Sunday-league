@@ -346,7 +346,7 @@
       text-transform: uppercase;
     }
 
-    select, input {
+    select, input, textarea {
       width: 100%;
       min-height: 48px;
       padding: 0 13px;
@@ -357,7 +357,101 @@
       outline: none;
     }
 
-    select:focus, input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(24,104,71,.10); }
+    select:focus, input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(24,104,71,.10); }
+
+    textarea { min-height: 96px; padding: 12px 13px; resize: vertical; }
+
+
+    .availability-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .availability-option {
+      min-height: 52px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      color: var(--muted);
+      background: #fff;
+      font-weight: 800;
+      text-align: left;
+      transition: .2s ease;
+    }
+
+    .availability-option strong {
+      display: block;
+      color: var(--ink);
+      font-size: .82rem;
+    }
+
+    .availability-option span {
+      display: block;
+      margin-top: 2px;
+      font-size: .62rem;
+    }
+
+    .availability-option.active {
+      color: var(--ink);
+      border-color: var(--lime);
+      background: var(--lime);
+      transform: translateY(-2px);
+    }
+
+    .time-result {
+      margin-top: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #fafbf7;
+    }
+
+    .time-result.leading {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(24,104,71,.08);
+    }
+
+    .time-result.reached {
+      border-color: var(--lime);
+      background: #f5ffd8;
+    }
+
+    .time-result-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .time-result-head strong { font-size: .86rem; }
+    .time-result-count {
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #e9ede5;
+      font-size: .62rem;
+      font-weight: 800;
+    }
+
+    .time-result-names {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: .68rem;
+      line-height: 1.5;
+    }
+
+    .confirm-time {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 9px;
+      border: 0;
+      border-radius: 12px;
+      color: var(--ink);
+      background: var(--lime);
+      font-size: .72rem;
+      font-weight: 900;
+    }
 
     .team-options {
       display: grid;
@@ -797,41 +891,76 @@
               <div class="overline">Next match</div>
               <h2 class="match-title" id="matchTitle">Sunday Evening Match</h2>
             </div>
-            <div class="status">Voting open</div>
+            <div class="status" id="matchStatus">Time voting</div>
           </div>
 
           <div class="event-details">
-            <div class="detail"><span class="detail-icon">📅</span><span id="matchDateText">Sunday, 26 July 2026 · 6:00 PM</span></div>
+            <div class="detail"><span class="detail-icon">📅</span><span id="fixedDateText">Sunday, 26 July 2026</span></div>
             <div class="detail"><span class="detail-icon">📍</span><span>AIT Football Field</span></div>
-            <div class="detail"><span class="detail-icon">👕</span><span>Bring one light and one dark shirt</span></div>
+            <div class="detail"><span class="detail-icon">🗳️</span><span id="timeStateText">Choose every time you are available</span></div>
           </div>
 
-          <div class="countdown" aria-label="Countdown to match">
-            <div class="time"><strong id="days">00</strong><span>Days</span></div>
-            <div class="time"><strong id="hours">00</strong><span>Hours</span></div>
-            <div class="time"><strong id="minutes">00</strong><span>Mins</span></div>
-            <div class="time"><strong id="seconds">00</strong><span>Secs</span></div>
+          <div id="preConfirmSummary">
+            <div class="summary-row">
+              <div class="mini-stat"><strong id="voterCount">0</strong><span>Voted</span></div>
+              <div class="mini-stat"><strong id="leadingTime">—</strong><span>Leading time</span></div>
+              <div class="mini-stat"><strong id="leadingVotes">0</strong><span>Available</span></div>
+            </div>
           </div>
 
-          <button class="share-button" id="shareMatch">↗ Share match to Messenger</button>
+          <button class="primary" id="shareMatch" type="button" style="margin-top:13px">Share match</button>
 
-          <div class="summary-row">
-            <div class="mini-stat"><strong id="playingCount">6</strong><span>Playing</span></div>
-            <div class="mini-stat"><strong id="teamACount">3</strong><span id="teamAStatLabel">Team A</span></div>
-            <div class="mini-stat"><strong id="teamBCount">3</strong><span id="teamBStatLabel">Team B</span></div>
+          <div id="confirmedSummary" style="display:none">
+            <div class="countdown" aria-label="Countdown to match">
+              <div class="time"><strong id="days">00</strong><span>Days</span></div>
+              <div class="time"><strong id="hours">00</strong><span>Hours</span></div>
+              <div class="time"><strong id="minutes">00</strong><span>Mins</span></div>
+              <div class="time"><strong id="seconds">00</strong><span>Secs</span></div>
+            </div>
+
+            <div class="summary-row">
+              <div class="mini-stat"><strong id="playingCount">0</strong><span>Joining</span></div>
+              <div class="mini-stat"><strong id="teamACount">0</strong><span id="teamALabel">Team A</span></div>
+              <div class="mini-stat"><strong id="teamBCount">0</strong><span id="teamBLabel">Team B</span></div>
+            </div>
           </div>
         </article>
 
-        <article class="section-card">
+        <article class="section-card" id="availabilityCard">
           <div class="section-title">
-            <h2>Your match vote</h2>
-            <span>No login needed</span>
+            <h2>Your availability</h2>
+            <span>Select multiple times</span>
           </div>
 
-          <div class="segmented" id="attendanceChoices">
-            <button class="choice active" data-attendance="playing">✓ Playing</button>
-            <button class="choice" data-attendance="maybe">? Maybe</button>
-            <button class="choice" data-attendance="out">× Can't play</button>
+          <div class="field">
+            <label for="availabilityPlayerSelect">Choose your name</label>
+            <select id="availabilityPlayerSelect">
+              <option value="">Select player</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Which times can you play?</label>
+            <div class="availability-options" id="availabilityOptions"></div>
+          </div>
+
+          <button class="primary" id="saveAvailability">Save my availability</button>
+          <div class="feedback" id="availabilityFeedback" aria-live="polite"></div>
+        </article>
+
+        <article class="section-card" id="timeResultsCard">
+          <div class="section-title">
+            <h2>Time results</h2>
+            <span id="minimumRule">3 players needed</span>
+          </div>
+          <div id="timeResults"></div>
+          <div class="notice" id="timeNotice">No time has reached the minimum yet.</div>
+        </article>
+
+        <article class="section-card" id="joinConfirmedCard" style="display:none">
+          <div class="section-title">
+            <h2>Join the confirmed match</h2>
+            <span id="confirmedTimeLabel">Time confirmed</span>
           </div>
 
           <div class="field">
@@ -844,16 +973,16 @@
           <div class="field">
             <label>Choose your team</label>
             <div class="team-options">
-              <button class="team-pick active" data-team="A"><strong id="teamAPickLabel">Team A</strong><span>Blue side</span></button>
-              <button class="team-pick" data-team="B"><strong id="teamBPickLabel">Team B</strong><span>Red side</span></button>
+              <button class="team-pick active" data-team="A"><strong id="teamAPickName">Team A</strong><span>Blue side</span></button>
+              <button class="team-pick" data-team="B"><strong id="teamBPickName">Team B</strong><span>Red side</span></button>
             </div>
           </div>
 
-          <button class="primary" id="saveVote">Confirm my choice</button>
+          <button class="primary" id="saveVote">Confirm team choice</button>
           <div class="feedback" id="feedback" aria-live="polite"></div>
         </article>
 
-        <article class="section-card">
+        <article class="section-card" id="teamsCard" style="display:none">
           <div class="section-title">
             <h2>Current teams</h2>
             <span id="balanceText">Balanced teams</span>
@@ -861,25 +990,80 @@
 
           <div class="teams-grid">
             <div class="team-column a">
-              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamAHeader">Team A</span></div><span class="team-count" id="aBadge">3</span></div>
+              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamAHeading">Team A</span></div><span class="team-count" id="aBadge">0</span></div>
               <div id="teamAList"></div>
             </div>
             <div class="team-column b">
-              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamBHeader">Team B</span></div><span class="team-count" id="bBadge">3</span></div>
+              <div class="team-header"><div class="team-name"><span class="team-dot"></span><span id="teamBHeading">Team B</span></div><span class="team-count" id="bBadge">0</span></div>
               <div id="teamBList"></div>
             </div>
           </div>
 
-          <div class="notice" id="teamNotice">Teams currently have equal numbers. Position balance can be handled by the organizer later.</div>
+          <div class="notice" id="teamNotice">Teams will appear after the match time is confirmed.</div>
         </article>
       </section>
 
       <section class="screen" id="playersScreen">
         <div class="page-heading">
           <h2>Our players</h2>
-          <p>The people behind the tackles, missed chances, and post-match dinners.</p>
+          <p>Each registered friend can update their own profile. Weekly team assignments are shown only inside the current match.</p>
         </div>
-        <div class="player-list" id="playerProfiles"></div>
+
+        <article class="section-card">
+          <div class="section-title">
+            <h2>Edit your profile</h2>
+            <span>Local UI demo</span>
+          </div>
+
+          <div class="field">
+            <label for="profilePlayerSelect">Choose your registered profile</label>
+            <select id="profilePlayerSelect">
+              <option value="">Select player</option>
+            </select>
+          </div>
+
+          <div id="profileEditor" style="display:none">
+            <div class="field">
+              <label for="profileImage">Profile image</label>
+              <input id="profileImage" type="file" accept="image/jpeg,image/png,image/webp" />
+            </div>
+
+            <div id="profilePreviewWrap" style="margin-top:12px;display:none">
+              <img id="profilePreview" alt="Selected profile preview" style="width:92px;height:92px;object-fit:cover;border-radius:22px;border:1px solid var(--line)" />
+            </div>
+
+            <div class="field">
+              <label for="profileName">Display name</label>
+              <input id="profileName" maxlength="30" placeholder="Your name or nickname" />
+            </div>
+
+            <div class="field">
+              <label for="profileNumber">Shirt number</label>
+              <input id="profileNumber" type="number" min="0" max="99" inputmode="numeric" placeholder="10" />
+            </div>
+
+            <div class="field">
+              <label for="profilePosition">Preferred position</label>
+              <select id="profilePosition">
+                <option>Goalkeeper</option>
+                <option>Defender</option>
+                <option>Midfielder</option>
+                <option>Forward</option>
+                <option>Anywhere</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="profileDescription">About you</label>
+              <textarea id="profileDescription" maxlength="160" placeholder="Write a short football description about yourself"></textarea>
+            </div>
+
+            <button class="primary" id="saveProfile">Save my profile</button>
+            <div class="feedback" id="profileFeedback" aria-live="polite"></div>
+          </div>
+        </article>
+
+        <div class="player-list" id="playerProfiles" style="margin-top:12px"></div>
       </section>
 
       <section class="screen" id="memoriesScreen">
@@ -940,7 +1124,7 @@
       <section class="screen" id="manageScreen">
         <div class="page-heading">
           <h2>Create next match</h2>
-          <p>Organizer UI preview. The location remains fixed at AIT Football Field.</p>
+          <p>Create the match date and available time options. Players will vote before the final time is confirmed.</p>
         </div>
 
         <article class="create-card">
@@ -963,8 +1147,8 @@
           </div>
 
           <div class="field">
-            <label for="newDate">Date and time</label>
-            <input id="newDate" type="datetime-local" value="2026-07-26T18:00" />
+            <label for="newDate">Fixed match date</label>
+            <input id="newDate" type="date" value="2026-07-26" />
           </div>
 
           <div class="field">
@@ -972,7 +1156,11 @@
             <input value="AIT Football Field" disabled />
           </div>
 
-          <button class="secondary" id="updateMatch">Update match</button>
+          <div class="field">
+            <label for="newTimes">Time options</label>
+            <input id="newTimes" value="17:00, 18:00, 19:00, 20:00" />
+          </div>
+          <button class="secondary" id="updateMatch">Create availability poll</button>
           <div class="feedback" id="manageFeedback" aria-live="polite"></div>
         </article>
 
@@ -1020,19 +1208,22 @@
 
   <script>
     const players = [
-      { id: "kaung", name: "Kaung", role: "Midfielder", number: 10, note: "Creates chances and debates formations.", team: "A", status: "playing" },
-      { id: "min", name: "Min", role: "Forward", number: 9, note: "Shoots whenever the goal is visible.", team: "A", status: "playing" },
-      { id: "aung", name: "Aung", role: "Defender", number: 5, note: "Simple passes and serious tackles.", team: "A", status: "playing" },
-      { id: "alex", name: "Alex", role: "Midfielder", number: 8, note: "Keeps the ball and the group chat moving.", team: "B", status: "playing" },
-      { id: "ben", name: "Ben", role: "Forward", number: 11, note: "Fast feet, unpredictable finishing.", team: "B", status: "playing" },
-      { id: "daniel", name: "Daniel", role: "Goalkeeper", number: 1, note: "Goalkeeper only when absolutely necessary.", team: "B", status: "playing" },
-      { id: "chris", name: "Chris", role: "Defender", number: 4, note: "Arrives late but always brings water.", team: null, status: "maybe" },
-      { id: "john", name: "John", role: "Midfielder", number: 7, note: "Runs all game and asks for one more match.", team: null, status: "out" }
+      { id: "kaung", name: "Kaung", role: "Midfielder", number: 10, note: "Creates chances and debates formations.", photo: null, team: "A", status: "playing" },
+      { id: "min", name: "Min", role: "Forward", number: 9, note: "Shoots whenever the goal is visible.", photo: null, team: "A", status: "playing" },
+      { id: "aung", name: "Aung", role: "Defender", number: 5, note: "Simple passes and serious tackles.", photo: null, team: "A", status: "playing" },
+      { id: "alex", name: "Alex", role: "Midfielder", number: 8, note: "Keeps the ball and the group chat moving.", photo: null, team: "B", status: "playing" },
+      { id: "ben", name: "Ben", role: "Forward", number: 11, note: "Fast feet, unpredictable finishing.", photo: null, team: "B", status: "playing" },
+      { id: "daniel", name: "Daniel", role: "Goalkeeper", number: 1, note: "Goalkeeper only when absolutely necessary.", photo: null, team: "B", status: "playing" },
+      { id: "chris", name: "Chris", role: "Defender", number: 4, note: "Arrives late but always brings water.", photo: null, team: null, status: "maybe" },
+      { id: "john", name: "John", role: "Midfielder", number: 7, note: "Runs all game and asks for one more match.", photo: null, team: null, status: "out" }
     ];
 
-    let matchDate = new Date("2026-07-26T18:00:00+07:00");
-    let selectedAttendance = "playing";
+    const fixedMatchDate = "2026-07-26";
+    const timeOptions = ["17:00", "18:00", "19:00", "20:00"];
+    const minimumPlayers = 3;
+    let confirmedTime = null;
     let selectedTeam = "A";
+    const availabilityVotes = {};
     let teamAName = "Team A";
     let teamBName = "Team B";
     let selectedMemoryDataUrl = "";
@@ -1069,7 +1260,7 @@
     }
 
     function renderTeams() {
-      const playing = players.filter(p => p.status === "playing");
+      const playing = players.filter(p => p.status === "playing" && (!confirmedTime || (availabilityVotes[p.id] || []).includes(confirmedTime)));
       const teamA = playing.filter(p => p.team === "A");
       const teamB = playing.filter(p => p.team === "B");
 
@@ -1104,27 +1295,20 @@
     function renderProfiles() {
       document.getElementById("playerProfiles").innerHTML = players.map((p, index) => `
         <article class="profile-card">
-          <div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(p.name)}</div>
+          ${p.photo
+            ? `<img class="profile-photo" src="${p.photo}" alt="${p.name} profile photo" style="object-fit:cover">`
+            : `<div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(p.name)}</div>`}
           <div class="profile-content">
             <h3>${p.name} · No. ${p.number}</h3>
             <p>${p.note}</p>
             <div class="tags">
               <span class="tag">${p.role}</span>
-              <span class="tag">${p.status === "playing" ? ` ${p.team === "A" ? teamAName : teamBName}` : p.status}</span>
             </div>
           </div>
         </article>
       `).join("");
     }
 
-    document.querySelectorAll("[data-attendance]").forEach(button => {
-      button.addEventListener("click", () => {
-        selectedAttendance = button.dataset.attendance;
-        document.querySelectorAll("[data-attendance]").forEach(b => b.classList.toggle("active", b === button));
-        document.querySelector(".team-options").style.opacity = selectedAttendance === "playing" ? "1" : ".38";
-        document.querySelectorAll(".team-pick").forEach(b => b.disabled = selectedAttendance !== "playing");
-      });
-    });
 
     document.querySelectorAll("[data-team]").forEach(button => {
       button.addEventListener("click", () => {
@@ -1137,25 +1321,39 @@
       const id = playerSelect.value;
       const feedback = document.getElementById("feedback");
 
+      if (!confirmedTime) {
+        feedback.textContent = "The match time must be confirmed first.";
+        return;
+      }
       if (!id) {
         feedback.textContent = "Choose your name first.";
         return;
       }
 
       const player = players.find(p => p.id === id);
-      player.status = selectedAttendance;
-      player.team = selectedAttendance === "playing" ? selectedTeam : null;
+      const isAvailable = (availabilityVotes[id] || []).includes(confirmedTime);
 
+      if (!isAvailable) {
+        feedback.textContent = `${player.name} did not select ${formatTime(confirmedTime)} as available.`;
+        return;
+      }
+
+      player.status = "playing";
+      player.team = selectedTeam;
       renderTeams();
-      renderProfiles();
-      feedback.textContent = selectedAttendance === "playing"
-        ? `${player.name} is confirmed for ${selectedTeam === "A" ? teamAName : teamBName}.`
-        : `${player.name}'s attendance has been updated.`;
-
+      feedback.textContent = `${player.name} joined ${selectedTeam === "A" ? "Team A" : "Team B"}.`;
       setTimeout(() => feedback.textContent = "", 3500);
     });
 
     function updateCountdown() {
+      if (!confirmedTime) {
+        ["days","hours","minutes","seconds"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = "00";
+        });
+        return;
+      }
+      const matchDate = new Date(`${fixedMatchDate}T${confirmedTime}:00+07:00`);
       const distance = Math.max(0, matchDate.getTime() - Date.now());
       document.getElementById("days").textContent = String(Math.floor(distance / 86400000)).padStart(2, "0");
       document.getElementById("hours").textContent = String(Math.floor((distance % 86400000) / 3600000)).padStart(2, "0");
@@ -1163,42 +1361,26 @@
       document.getElementById("seconds").textContent = String(Math.floor((distance % 60000) / 1000)).padStart(2, "0");
     }
 
-    document.getElementById("updateMatch").addEventListener("click", () => {
-      const title = document.getElementById("newTitle").value.trim() || "Sunday Match";
-      const value = document.getElementById("newDate").value;
-      const feedback = document.getElementById("manageFeedback");
-
-      if (!value) {
-        feedback.textContent = "Choose a date and time.";
-        return;
-      }
-
-      matchDate = new Date(`${value}:00+07:00`);
-      teamAName = document.getElementById("teamANameInput").value.trim() || "Team A";
-      teamBName = document.getElementById("teamBNameInput").value.trim() || "Team B";
-      document.getElementById("matchTitle").textContent = title;
-      document.getElementById("teamAStatLabel").textContent = teamAName;
-      document.getElementById("teamBStatLabel").textContent = teamBName;
-      document.getElementById("teamAPickLabel").textContent = teamAName;
-      document.getElementById("teamBPickLabel").textContent = teamBName;
-      document.getElementById("teamAHeader").textContent = teamAName;
-      document.getElementById("teamBHeader").textContent = teamBName;
-      document.getElementById("matchDateText").textContent = matchDate.toLocaleString("en-GB", {
-        weekday: "long", day: "numeric", month: "long", year: "numeric",
-        hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Bangkok"
-      });
-      feedback.textContent = "Match updated on this device.";
-      updateCountdown();
-    });
 
 
     function buildShareMessage() {
       const title = document.getElementById("matchTitle").textContent;
-      const dateText = document.getElementById("matchDateText").textContent;
+      const dateText = document.getElementById("fixedDateText").textContent;
+      const timeText = confirmedTime
+        ? formatTime(confirmedTime)
+        : "Time voting is still open";
       const pageUrl = location.protocol === "http:" || location.protocol === "https:"
         ? window.location.href
         : "[Add the deployed website link here]";
-      return `⚽ ${title}\n📅 ${dateText}\n📍 AIT Football Field\n🔵 ${teamAName} vs 🔴 ${teamBName}\n\nOpen the match link to vote and choose your team:\n${pageUrl}`;
+
+      return `⚽ ${title}
+📅 ${dateText}
+⏰ ${timeText}
+📍 AIT Football Field
+🔵 ${teamAName} vs 🔴 ${teamBName}
+
+Open the match link to vote for a time and join:
+${pageUrl}`;
     }
 
     function openShareFallback(message, helpText) {
@@ -1207,7 +1389,8 @@
       document.getElementById("shareModal").classList.add("open");
     }
 
-    document.getElementById("shareMatch").addEventListener("click", async () => {
+    const shareMatchButton = document.getElementById("shareMatch");
+    if (shareMatchButton) shareMatchButton.addEventListener("click", async () => {
       const title = document.getElementById("matchTitle").textContent;
       const text = buildShareMessage();
       const canNativeShare = typeof navigator.share === "function" && window.isSecureContext && /^https?:$/.test(location.protocol);
@@ -1340,9 +1523,280 @@
     document.getElementById("closeModal").addEventListener("click", () => modal.classList.remove("open"));
     modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
 
+
+
+    const availabilityPlayerSelect = document.getElementById("availabilityPlayerSelect");
+    const availabilityOptions = document.getElementById("availabilityOptions");
+    let selectedAvailability = new Set();
+
+    players.forEach(player => {
+      const option = document.createElement("option");
+      option.value = player.id;
+      option.textContent = player.name;
+      availabilityPlayerSelect.appendChild(option);
+    });
+
+    function formatTime(value) {
+      const [hour, minute] = value.split(":").map(Number);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+
+    function renderAvailabilityOptions() {
+      availabilityOptions.innerHTML = timeOptions.map(time => `
+        <button type="button" class="availability-option ${selectedAvailability.has(time) ? "active" : ""}" data-time="${time}">
+          <strong>${formatTime(time)}</strong>
+          <span>Tap if available</span>
+        </button>
+      `).join("");
+
+      availabilityOptions.querySelectorAll("[data-time]").forEach(button => {
+        button.addEventListener("click", () => {
+          const time = button.dataset.time;
+          if (selectedAvailability.has(time)) selectedAvailability.delete(time);
+          else selectedAvailability.add(time);
+          renderAvailabilityOptions();
+        });
+      });
+    }
+
+    availabilityPlayerSelect.addEventListener("change", () => {
+      const existing = availabilityVotes[availabilityPlayerSelect.value] || [];
+      selectedAvailability = new Set(existing);
+      renderAvailabilityOptions();
+    });
+
+    document.getElementById("saveAvailability").addEventListener("click", () => {
+      const playerId = availabilityPlayerSelect.value;
+      const feedback = document.getElementById("availabilityFeedback");
+
+      if (!playerId) {
+        feedback.textContent = "Choose your name first.";
+        return;
+      }
+      if (!selectedAvailability.size) {
+        feedback.textContent = "Select at least one available time.";
+        return;
+      }
+
+      availabilityVotes[playerId] = [...selectedAvailability];
+      feedback.textContent = "Your availability has been saved on this device.";
+      renderTimeResults();
+    });
+
+    function renderTimeResults() {
+      const voterIds = Object.keys(availabilityVotes);
+      const counts = timeOptions.map(time => {
+        const availableIds = voterIds.filter(id => availabilityVotes[id].includes(time));
+        return { time, availableIds };
+      });
+
+      const maxVotes = Math.max(0, ...counts.map(item => item.availableIds.length));
+      const leading = counts.find(item => item.availableIds.length === maxVotes && maxVotes > 0);
+
+      document.getElementById("voterCount").textContent = voterIds.length;
+      document.getElementById("leadingTime").textContent = leading ? formatTime(leading.time) : "—";
+      document.getElementById("leadingVotes").textContent = leading ? leading.availableIds.length : 0;
+
+      document.getElementById("timeResults").innerHTML = counts.map(item => {
+        const names = item.availableIds.map(id => players.find(p => p.id === id)?.name).filter(Boolean);
+        const reached = item.availableIds.length >= minimumPlayers;
+        const isLeading = leading && item.time === leading.time;
+        return `
+          <div class="time-result ${reached ? "reached" : ""} ${isLeading ? "leading" : ""}">
+            <div class="time-result-head">
+              <strong>${formatTime(item.time)}</strong>
+              <span class="time-result-count">${item.availableIds.length} available</span>
+            </div>
+            <div class="time-result-names">${names.length ? names.join(", ") : "No players yet"}</div>
+            ${reached && !confirmedTime ? `<button type="button" class="confirm-time" data-confirm-time="${item.time}">Confirm ${formatTime(item.time)}</button>` : ""}
+          </div>
+        `;
+      }).join("");
+
+      document.querySelectorAll("[data-confirm-time]").forEach(button => {
+        button.addEventListener("click", () => confirmMatchTime(button.dataset.confirmTime));
+      });
+
+      const reachedOptions = counts.filter(item => item.availableIds.length >= minimumPlayers);
+      const notice = document.getElementById("timeNotice");
+      if (confirmedTime) {
+        notice.textContent = `${formatTime(confirmedTime)} is confirmed. Only players available at this time can join teams.`;
+      } else if (reachedOptions.length) {
+        notice.textContent = "At least one time reached the minimum. The organizer can confirm the best option.";
+      } else {
+        notice.textContent = `No time has reached the minimum of ${minimumPlayers} players yet.`;
+      }
+    }
+
+    function confirmMatchTime(time) {
+      confirmedTime = time;
+      document.getElementById("matchStatus").textContent = "Time confirmed";
+      document.getElementById("timeStateText").textContent = `${formatTime(time)} confirmed`;
+      document.getElementById("confirmedTimeLabel").textContent = `${formatTime(time)} confirmed`;
+      document.getElementById("preConfirmSummary").style.display = "none";
+      document.getElementById("confirmedSummary").style.display = "block";
+      document.getElementById("joinConfirmedCard").style.display = "block";
+      document.getElementById("teamsCard").style.display = "block";
+
+      players.forEach(player => {
+        const isAvailable = (availabilityVotes[player.id] || []).includes(time);
+        if (!isAvailable) {
+          player.status = "out";
+          player.team = null;
+        } else if (player.status !== "playing") {
+          player.status = "playing";
+          player.team = player.team || null;
+        }
+      });
+
+      renderTimeResults();
+      renderTeams();
+      updateCountdown();
+    }
+
+    document.getElementById("updateMatch").addEventListener("click", () => {
+      const title = document.getElementById("newTitle").value.trim() || "Sunday Match";
+      const dateValue = document.getElementById("newDate").value;
+      const feedback = document.getElementById("manageFeedback");
+
+      if (!dateValue) {
+        feedback.textContent = "Choose the fixed match date.";
+        return;
+      }
+
+      document.getElementById("matchTitle").textContent = title;
+      const date = new Date(`${dateValue}T00:00:00+07:00`);
+      document.getElementById("fixedDateText").textContent = date.toLocaleDateString("en-GB", {
+        weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok"
+      });
+      feedback.textContent = "Availability poll created on this device.";
+    });
+
+    renderAvailabilityOptions();
+    renderTimeResults();
+
+    const profilePlayerSelect = document.getElementById("profilePlayerSelect");
+    const profileEditor = document.getElementById("profileEditor");
+    const profileName = document.getElementById("profileName");
+    const profileNumber = document.getElementById("profileNumber");
+    const profilePosition = document.getElementById("profilePosition");
+    const profileDescription = document.getElementById("profileDescription");
+    const profileImage = document.getElementById("profileImage");
+    const profilePreview = document.getElementById("profilePreview");
+    const profilePreviewWrap = document.getElementById("profilePreviewWrap");
+    let pendingProfileImage = null;
+
+    players.forEach(player => {
+      const option = document.createElement("option");
+      option.value = player.id;
+      option.textContent = player.name;
+      profilePlayerSelect.appendChild(option);
+    });
+
+    profilePlayerSelect.addEventListener("change", () => {
+      const player = players.find(p => p.id === profilePlayerSelect.value);
+      const feedback = document.getElementById("profileFeedback");
+      feedback.textContent = "";
+      pendingProfileImage = null;
+      profileImage.value = "";
+
+      if (!player) {
+        profileEditor.style.display = "none";
+        return;
+      }
+
+      profileEditor.style.display = "block";
+      profileName.value = player.name;
+      profileNumber.value = player.number;
+      profilePosition.value = player.role;
+      profileDescription.value = player.note;
+
+      if (player.photo) {
+        profilePreview.src = player.photo;
+        profilePreviewWrap.style.display = "block";
+      } else {
+        profilePreview.removeAttribute("src");
+        profilePreviewWrap.style.display = "none";
+      }
+    });
+
+    profileImage.addEventListener("change", () => {
+      const file = profileImage.files && profileImage.files[0];
+      const feedback = document.getElementById("profileFeedback");
+
+      if (!file) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        feedback.textContent = "Choose a JPEG, PNG, or WebP image.";
+        profileImage.value = "";
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        feedback.textContent = "Image must be smaller than 5 MB.";
+        profileImage.value = "";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        pendingProfileImage = reader.result;
+        profilePreview.src = pendingProfileImage;
+        profilePreviewWrap.style.display = "block";
+        feedback.textContent = "Image selected. Save your profile to apply it.";
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById("saveProfile").addEventListener("click", () => {
+      const player = players.find(p => p.id === profilePlayerSelect.value);
+      const feedback = document.getElementById("profileFeedback");
+
+      if (!player) {
+        feedback.textContent = "Choose your registered profile first.";
+        return;
+      }
+
+      const newName = profileName.value.trim();
+      const newDescription = profileDescription.value.trim();
+      const number = Number(profileNumber.value);
+
+      if (!newName) {
+        feedback.textContent = "Enter your name.";
+        return;
+      }
+      if (!Number.isInteger(number) || number < 0 || number > 99) {
+        feedback.textContent = "Choose a shirt number from 0 to 99.";
+        return;
+      }
+      if (!newDescription) {
+        feedback.textContent = "Write a short description about yourself.";
+        return;
+      }
+
+      player.name = newName;
+      player.number = number;
+      player.role = profilePosition.value;
+      player.note = newDescription;
+      if (pendingProfileImage) player.photo = pendingProfileImage;
+
+      const mainOption = [...playerSelect.options].find(option => option.value === player.id);
+      if (mainOption) mainOption.textContent = `${player.name} · ${player.role}`;
+
+      const profileOption = [...profilePlayerSelect.options].find(option => option.value === player.id);
+      if (profileOption) profileOption.textContent = player.name;
+
+      renderTeams();
+      renderProfiles();
+      feedback.textContent = "Your profile has been updated on this device.";
+      pendingProfileImage = null;
+    });
+
     renderTeams();
     renderProfiles();
     updateCountdown();
+    document.getElementById("joinConfirmedCard").style.display = confirmedTime ? "block" : "none";
+    document.getElementById("teamsCard").style.display = confirmedTime ? "block" : "none";
     setInterval(updateCountdown, 1000);
   </script>
 </body>
