@@ -826,13 +826,63 @@
     }
 
     .time-slot-pill {
-      padding: 10px 12px;
+      min-height: 42px;
+      padding: 8px 10px 8px 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       border-radius: 999px;
       color: var(--ink);
       background: #edf0e8;
       font-size: .75rem;
       font-weight: 900;
       white-space: nowrap;
+    }
+
+    .time-slot-remove {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      color: #8c342d;
+      background: #ffe3e0;
+      font-size: .82rem;
+      font-weight: 900;
+    }
+
+    .time-add-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px;
+      align-items: stretch;
+    }
+
+    .time-add-row input {
+      min-width: 0;
+    }
+
+    .compact-button {
+      min-height: 48px;
+      padding: 0 15px;
+      white-space: nowrap;
+    }
+
+    .field-help {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .64rem;
+      line-height: 1.45;
+    }
+
+    #notificationCard .section-title {
+      margin-top: 8px;
+    }
+
+    #notificationCard .primary,
+    #notificationCard .share-button {
+      width: 100%;
     }
 
     .memory-list { display: grid; gap: 12px; }
@@ -1145,13 +1195,14 @@
           >
             Connecting…
           </span>
+          <button class="icon-btn" id="notificationsButton" aria-label="Notification settings">🔔</button>
         </div>
       </div>
 
       <div class="hero-copy">
         <div class="private-badge">🔒 Friends only</div>
-        <h1>Our Sunday. Our teams.</h1>
-        <p>Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board.</p>
+        <h1 id="heroTitle">Our Sunday. Our teams.</h1>
+        <p id="heroDescription">Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board.</p>
       </div>
     </header>
 
@@ -1391,33 +1442,6 @@
           </div>
         </article>
 
-        <article class="section-card" id="notificationCard">
-          <div class="section-title">
-            <h2>Home Screen notifications</h2>
-            <span id="pushStatusLabel">Checking…</span>
-          </div>
-
-          <div class="notice" id="pushInstructions">
-            Add this website to your Home Screen, open it from the new icon, then enable notifications.
-          </div>
-
-          <button class="primary" id="enablePushNotifications" type="button">
-            🔔 Enable notifications
-          </button>
-
-          <button class="share-button" id="testNotificationSound" type="button">
-            🔊 Test in-app sound
-          </button>
-
-          <button class="share-button" id="disablePushNotifications" type="button" style="display:none;background:#df5144">
-            Disable notifications
-          </button>
-
-          <div class="feedback" id="pushFeedback" aria-live="polite"></div>
-
-
-        </article>
-
         <div class="player-list" id="playerProfiles" style="margin-top:12px"></div>
       </section>
 
@@ -1498,15 +1522,14 @@
           </div>
 
           <div class="field">
-            <label>Time options</label>
-            <div class="time-slot-picker" aria-label="Time options">
-              <span class="time-slot-pill">🕔 5:00 PM</span>
-              <span class="time-slot-pill">🕠 5:15 PM</span>
-              <span class="time-slot-pill">🕠 5:30 PM</span>
-              <span class="time-slot-pill">🕠 5:45 PM</span>
-              <span class="time-slot-pill">🕕 6:00 PM</span>
+            <label for="newTimeInput">Time options</label>
+            <div class="time-add-row">
+              <input id="newTimeInput" type="time" step="300" />
+              <button class="secondary compact-button" id="addTimeOption" type="button">Add time</button>
             </div>
-            <input id="newTimes" type="hidden" value="17:00,17:15,17:30,17:45,18:00" />
+            <div class="time-slot-picker" id="createTimeSlots" aria-label="Selected time options"></div>
+            <input id="newTimes" type="hidden" value="" />
+            <div class="field-help">Add any time you want. Tap × to remove a time.</div>
           </div>
           <button class="secondary" id="updateMatch">Create availability poll</button>
           <div class="feedback" id="manageFeedback" aria-live="polite"></div>
@@ -1552,6 +1575,42 @@
     </div>
   </div>
 
+  <div class="modal" id="notificationModal" role="dialog" aria-modal="true" aria-label="Notification settings">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h3>Notifications</h3>
+        <button class="close" id="closeNotificationModal" aria-label="Close">×</button>
+      </div>
+      <div id="notificationCard">
+          <div class="section-title">
+            <h2>Home Screen notifications</h2>
+            <span id="pushStatusLabel">Checking…</span>
+          </div>
+
+          <div class="notice" id="pushInstructions">
+            Add this website to your Home Screen, open it from the new icon, then enable notifications.
+          </div>
+
+          <button class="primary" id="enablePushNotifications" type="button">
+            🔔 Enable notifications
+          </button>
+
+          <button class="share-button" id="testNotificationSound" type="button">
+            🔊 Test in-app sound
+          </button>
+
+          <button class="share-button" id="disablePushNotifications" type="button" style="display:none;background:#df5144">
+            Disable notifications
+          </button>
+
+          <div class="feedback" id="pushFeedback" aria-live="polite"></div>
+
+
+        
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabase-client.js"></script>
   <script src="./push-config.js"></script>
@@ -1583,6 +1642,7 @@
     let selectedAvailability = new Set();
     let selectedUnavailable = false;
     let selectedTeam = "A";
+    let createTimeOptions = [];
     let teamAName = "Team A";
     let teamBName = "Team B";
     let realtimeChannels = [];
@@ -3662,6 +3722,69 @@
       }
     }
 
+    function syncCreateTimeInput() {
+      document.getElementById("newTimes").value =
+        createTimeOptions.join(",");
+    }
+
+    function renderCreateTimeOptions() {
+      const container =
+        document.getElementById("createTimeSlots");
+
+      if (!container) return;
+
+      if (!createTimeOptions.length) {
+        container.innerHTML =
+          `<div class="empty" style="width:100%">No time options added yet</div>`;
+        syncCreateTimeInput();
+        return;
+      }
+
+      container.innerHTML = createTimeOptions
+        .map(time => `
+          <span class="time-slot-pill">
+            <span aria-hidden="true">🕒</span>
+            ${formatTime(time)}
+            <button
+              class="time-slot-remove"
+              type="button"
+              data-remove-create-time="${time}"
+              aria-label="Remove ${formatTime(time)}"
+            >×</button>
+          </span>
+        `)
+        .join("");
+
+      syncCreateTimeInput();
+    }
+
+    function addCreateTimeOption() {
+      const input =
+        document.getElementById("newTimeInput");
+      const feedback =
+        document.getElementById("manageFeedback");
+      const normalized = normalizeTime(input.value);
+
+      if (!normalized) {
+        feedback.textContent =
+          "Choose a valid time first.";
+        return;
+      }
+
+      if (createTimeOptions.includes(normalized)) {
+        feedback.textContent =
+          `${formatTime(normalized)} is already included.`;
+        return;
+      }
+
+      createTimeOptions = [
+        ...createTimeOptions,
+        normalized
+      ].sort();
+      feedback.textContent = "";
+      renderCreateTimeOptions();
+    }
+
     function parseTimeOptions(value) {
       const unique = new Set();
 
@@ -3713,7 +3836,28 @@
 
       if (!parsedTimes.length) {
         feedback.textContent =
-          "Enter at least one valid time, such as 17:00, 18:00.";
+          "Add at least one time option.";
+        return;
+      }
+
+      const { data: existingSameDay, error: existingDayError } =
+        await window.db
+          .from("matches")
+          .select("id, title, status")
+          .eq("match_date", dateValue)
+          .limit(1)
+          .maybeSingle();
+
+      if (existingDayError) {
+        feedback.textContent =
+          existingDayError.message ||
+          "Could not check this match date.";
+        return;
+      }
+
+      if (existingSameDay) {
+        feedback.textContent =
+          `A match already exists on ${formatMatchDate(dateValue)}. Choose another date.`;
         return;
       }
 
@@ -3777,6 +3921,9 @@
 
         feedback.textContent =
           `Match created for ${formatMatchDate(dateValue)}. It now appears in Next created matches for everyone.`;
+        createTimeOptions = [];
+        document.getElementById("newTimeInput").value = "";
+        renderCreateTimeOptions();
 
         document
           .querySelector('[data-screen="homeScreen"]')
@@ -3791,7 +3938,7 @@
             .includes("duplicate")
         ) {
           feedback.textContent =
-            "A matching session already exists. Change the title, date, or time options.";
+            "A match already exists on that date. Choose another date.";
         } else {
           feedback.textContent =
             error.message || "Could not create the match.";
@@ -4951,6 +5098,34 @@ ${pageUrl}`;
         notifyArrivalAtField
       );
 
+    document.getElementById("addTimeOption")
+      .addEventListener(
+        "click",
+        addCreateTimeOption
+      );
+
+    document.getElementById("newTimeInput")
+      .addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addCreateTimeOption();
+        }
+      });
+
+    document.getElementById("createTimeSlots")
+      .addEventListener("click", event => {
+        const button = event.target.closest(
+          "[data-remove-create-time]"
+        );
+        if (!button) return;
+
+        createTimeOptions = createTimeOptions.filter(
+          time =>
+            time !== button.dataset.removeCreateTime
+        );
+        renderCreateTimeOptions();
+      });
+
     document.getElementById("updateMatch")
       .addEventListener(
         "click",
@@ -5143,6 +5318,59 @@ ${pageUrl}`;
         }
       });
 
+    const notificationModal =
+      document.getElementById("notificationModal");
+
+    document.getElementById("notificationsButton")
+      .addEventListener("click", () => {
+        notificationModal.classList.add("open");
+        updatePushNotificationUI();
+      });
+
+    document.getElementById("closeNotificationModal")
+      .addEventListener("click", () =>
+        notificationModal.classList.remove("open")
+      );
+
+    notificationModal.addEventListener("click", event => {
+      if (event.target === notificationModal) {
+        notificationModal.classList.remove("open");
+      }
+    });
+
+    function updateHeroForScreen(screenId) {
+      const copy = {
+        homeScreen: {
+          title: "Our Sunday. Our teams.",
+          description:
+            "Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board."
+        },
+        playersScreen: {
+          title: "Meet the squad.",
+          description:
+            "Create your profile, update your details, and see everyone in the group."
+        },
+        memoriesScreen: {
+          title: "Keep the moments.",
+          description:
+            "Share match photos, captions, and comments with the whole group."
+        },
+        manageScreen: {
+          title: "Plan the next match.",
+          description:
+            "Choose a date, add your own time options, and publish the availability poll."
+        }
+      }[screenId] || {
+        title: "Sunday League",
+        description: "Private football for friends."
+      };
+
+      document.getElementById("heroTitle").textContent =
+        copy.title;
+      document.getElementById("heroDescription").textContent =
+        copy.description;
+    }
+
     document.querySelectorAll(".nav-item")
       .forEach(item => {
         item.addEventListener("click", () => {
@@ -5160,6 +5388,7 @@ ${pageUrl}`;
                 screen.id === item.dataset.screen
               )
             );
+          updateHeroForScreen(item.dataset.screen);
           window.scrollTo({
             top: 0,
             behavior: "smooth"
@@ -5172,6 +5401,10 @@ ${pageUrl}`;
         document.getElementById("newDate");
 
       dateInput.value = getNextSundayBangkok();
+      createTimeOptions = [];
+      document.getElementById("newTimeInput").value = "";
+      renderCreateTimeOptions();
+      updateHeroForScreen("homeScreen");
     }
 
     window.addEventListener("online", () => {
