@@ -1,69 +1,41 @@
-# Sunday League v11 — Home Screen Web Push
+# Sunday League v11.1 — Realtime and Sound Fix
 
-This is still a website. It does not require the App Store or Google Play.
+## What changed
 
-## Notifications included
+- Realtime is split into separate table subscriptions so one failing table does not block all updates.
+- The authenticated JWT is explicitly attached to Supabase Realtime.
+- Channel errors are logged with their full error details.
+- Automatic reconnect uses exponential backoff.
+- The app refreshes immediately when it returns to the foreground, regains focus, or comes back online.
+- A 5-second match-data fallback and 15-second full-data fallback remove the need for manual refresh even if WebSocket delivery fails.
+- The header shows `Live`, `Live + backup`, `Reconnecting`, or `Offline`.
+- Push received while the app is open is forwarded from the service worker into the page.
+- Open-app alerts use a short Web Audio beep after the user enables or tests sound.
+- Closed-app notifications request normal sound and vibration, but the operating system still controls whether sound is played.
+- The service worker cache version is bumped so old code is replaced.
 
-- A registered player creates a new match
-- The match creator confirms the final time
-- A player taps `I've Arrived at the Field`
+## Deploy
 
-The notifications can appear when the Home Screen website is closed.
-
-## Deploy the website
-
-1. Run `v11_push_notifications_migration.sql` in Supabase SQL Editor.
-2. Copy these items into the root of your GitHub repository:
+1. Run `v11_1_realtime_repair.sql` in Supabase SQL Editor.
+2. Replace the v11 website files with the contents of this folder:
    - `index.html`
-   - `manifest.webmanifest`
    - `service-worker.js`
+   - `manifest.webmanifest`
    - `push-config.js`
-   - the entire `icons` folder
+   - `icons/`
 3. Keep your configured `supabase-client.js`.
-4. Commit and push to GitHub.
-5. Wait for Vercel to redeploy.
+4. Keep the existing deployed `send-web-push` Edge Function and VAPID secrets.
+5. Commit and push to GitHub.
+6. Wait for Vercel to deploy.
+7. Fully close the Home Screen website and reopen it.
+8. Open Players and tap `Test in-app sound`.
 
-## Deploy the Supabase Edge Function
+## Phone settings
 
-The function source is:
+For system notification sound, ensure:
+- Sunday League notifications are allowed
+- Sounds are enabled for Sunday League
+- the phone is not muted
+- Focus / Do Not Disturb is not suppressing alerts
 
-`supabase/functions/send-web-push/index.ts`
-
-From the project folder, run:
-
-```bash
-npx supabase login
-npx supabase link --project-ref ayqfacnbtttiyhdwytaz
-npx supabase secrets set VAPID_PUBLIC_KEY="BNm0-cirwbvoZkCxpKU5x4XiodUMC1r8mxLd88T5lBfC5PPTNaBNiASG9cKrCqHdNdTA2ZfWPfsiLKSOc-jOWaA" VAPID_PRIVATE_KEY="<COPY_FROM_PRIVATE_SECRET_FILE>" VAPID_SUBJECT="https://sunday-league-gamma.vercel.app"
-npx supabase functions deploy send-web-push
-```
-
-The private key is intentionally excluded from the project ZIP.
-Use the separately supplied `VAPID_PRIVATE_SECRET_DO_NOT_COMMIT.txt`.
-
-## iPhone/iPad setup for each friend
-
-1. Open the Vercel link in Safari.
-2. Tap Share.
-3. Tap Add to Home Screen.
-4. Open Sunday League from the new Home Screen icon.
-5. Register a player profile.
-6. Open Players.
-7. Tap Enable notifications.
-8. Tap Allow.
-
-## Android setup for each friend
-
-1. Open the Vercel link in Chrome.
-2. Use Add to Home screen or Install app.
-3. Open Sunday League from the icon.
-4. Register a profile.
-5. Open Players and tap Enable notifications.
-6. Tap Allow.
-
-## Important
-
-- Each device must opt in once.
-- Clearing browser/site data removes the subscription.
-- The private VAPID key must never be committed to GitHub.
-- iPhone notification permission must be requested from the Home Screen web app, not from an ordinary Safari tab.
+A website cannot force a system sound when the operating system has silenced it.

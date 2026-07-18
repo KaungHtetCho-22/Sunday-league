@@ -1,4 +1,11 @@
-const CACHE_NAME = "sunday-league-v11";
+
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+const CACHE_NAME = "sunday-league-v11-1";
 
 const APP_SHELL = [
   "/",
@@ -112,16 +119,37 @@ self.addEventListener("push", event => {
     badge: "/icons/badge-96.png",
     tag: payload.tag,
     renotify: true,
+    silent: false,
+    vibrate: [220, 100, 220],
+    timestamp: Date.now(),
     data: {
       url: payload.url || "/"
     }
   };
 
   event.waitUntil(
-    self.registration.showNotification(
-      payload.title,
-      options
-    )
+    Promise.all([
+      self.registration.showNotification(
+        payload.title,
+        options
+      ),
+      self.clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true
+        })
+        .then(windowClients =>
+          Promise.all(
+            windowClients.map(client =>
+              client.postMessage({
+                type:
+                  "SUNDAY_LEAGUE_PUSH_RECEIVED",
+                payload
+              })
+            )
+          )
+        )
+    ])
   );
 });
 

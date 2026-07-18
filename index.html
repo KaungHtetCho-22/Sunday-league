@@ -1108,7 +1108,15 @@
           <div class="mark">⚽</div>
           <div>Sunday League<small>Private friends group</small></div>
         </div>
-        <button class="icon-btn" id="settingsButton" aria-label="Match settings">⚙</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span
+            id="realtimeStatus"
+            style="padding:6px 9px;border-radius:999px;background:#e9ede5;color:#52685d;font-size:.58rem;font-weight:900"
+          >
+            Connecting…
+          </span>
+          <button class="icon-btn" id="settingsButton" aria-label="Match settings">⚙</button>
+        </div>
       </div>
 
       <div class="hero-copy">
@@ -1375,6 +1383,10 @@
             🔔 Enable notifications
           </button>
 
+          <button class="share-button" id="testNotificationSound" type="button">
+            🔊 Test in-app sound
+          </button>
+
           <button class="share-button" id="disablePushNotifications" type="button" style="display:none;background:#df5144">
             Disable notifications
           </button>
@@ -1549,15 +1561,23 @@
     let selectedTeam = "A";
     let teamAName = "Team A";
     let teamBName = "Team B";
-    let matchRealtimeChannel = null;
+    let realtimeChannels = [];
+    let realtimeChannelStates = new Map();
+    let realtimeReconnectTimer = null;
+    let realtimeReconnectAttempts = 0;
     let matchRefreshTimer = null;
     let fullRefreshTimer = null;
+    let fallbackMatchSyncTimer = null;
+    let fallbackFullSyncTimer = null;
+    let syncRequestInFlight = false;
     let arrivals = [];
     let arrivalPlans = [];
     let selectedPlannedArrival = null;
     let arrivalToastTimer = null;
     let serviceWorkerRegistration = null;
     let currentPushSubscription = null;
+    let alertAudioContext = null;
+    let alertSoundUnlocked = false;
 
     const availabilityOptions = document.getElementById("availabilityOptions");
     const plannedArrivalOptions =
@@ -3751,15 +3771,87 @@ ${pageUrl}`;
       document.getElementById("shareModal").classList.add("open");
     }
 
+    function updateRealtimeStatus() {
+      const statusElement =
+        document.getElementById("realtimeStatus");
+
+      const states = [
+        ...realtimeChannelStates.values()
+      ];
+      const subscribed = states.filter(
+        state => state === "SUBSCRIBED"
+      ).length;
+      const failed = states.some(
+        state =>
+          state === "CHANNEL_ERROR" ||
+          state === "TIMED_OUT" ||
+          state === "CLOSED"
+      );
+
+      if (subscribed > 0 && !failed) {
+        statusElement.textContent = "● Live";
+        statusElement.style.background = "#e5f7e9";
+        statusElement.style.color = "#186847";
+        return;
+      }
+
+      if (subscribed > 0) {
+        statusElement.textContent = "● Live + backup";
+        statusElement.style.background = "#fff2c9";
+        statusElement.style.color = "#6f5c14";
+        return;
+      }
+
+      statusElement.textContent = navigator.onLine
+        ? "Reconnecting…"
+        : "Offline";
+      statusElement.style.background = "#ffe3e0";
+      statusElement.style.color = "#8c342d";
+    }
+
+    async function runMatchSync(reason = "manual") {
+      if (syncRequestInFlight) return;
+
+      syncRequestInFlight = true;
+
+      try {
+        await loadActiveMatchFromSupabase();
+      } catch (error) {
+        console.error(
+          `Match sync failed (${reason}):`,
+          error
+        );
+      } finally {
+        syncRequestInFlight = false;
+      }
+    }
+
+    async function runFullSync(reason = "manual") {
+      if (syncRequestInFlight) return;
+
+      syncRequestInFlight = true;
+
+      try {
+        await loadRegisteredPlayersFromSupabase();
+        await loadActiveMatchFromSupabase();
+        await loadMemoryMatchesFromSupabase();
+        await loadMemoriesFromSupabase();
+      } catch (error) {
+        console.error(
+          `Full sync failed (${reason}):`,
+          error
+        );
+      } finally {
+        syncRequestInFlight = false;
+      }
+    }
+
     function scheduleMatchRefresh() {
       clearTimeout(matchRefreshTimer);
-      matchRefreshTimer = setTimeout(async () => {
-        try {
-          await loadActiveMatchFromSupabase();
-        } catch (error) {
-          console.error("Realtime match refresh failed:", error);
-        }
-      }, 250);
+      matchRefreshTimer = setTimeout(
+        () => runMatchSync("realtime"),
+        120
+      );
     }
 
     function scheduleMemoryRefresh() {
@@ -3769,148 +3861,395 @@ ${pageUrl}`;
           await loadMemoryMatchesFromSupabase();
           await loadMemoriesFromSupabase();
         } catch (error) {
-          console.error("Realtime memory refresh failed:", error);
+          console.error(
+            "Realtime memory refresh failed:",
+            error
+          );
         }
-      }, 250);
+      }, 120);
     }
 
     function scheduleFullRefresh() {
       clearTimeout(fullRefreshTimer);
-      fullRefreshTimer = setTimeout(async () => {
-        try {
-          await loadRegisteredPlayersFromSupabase();
-          await loadActiveMatchFromSupabase();
-          await loadMemoryMatchesFromSupabase();
-          await loadMemoriesFromSupabase();
-        } catch (error) {
-          console.error("Realtime full refresh failed:", error);
-        }
-      }, 250);
+      fullRefreshTimer = setTimeout(
+        () => runFullSync("realtime"),
+        120
+      );
     }
 
-    function setupRealtimeSubscriptions() {
-      if (matchRealtimeChannel) {
-        window.db.removeChannel(matchRealtimeChannel);
+    function payloadWasCreatedByCurrentUser(payload) {
+      const row = payload?.new || payload?.old || {};
+
+      return Boolean(
+        currentSupabaseUser &&
+        (
+          row.created_by ===
+            currentSupabaseUser.id ||
+          row.owner_id ===
+            currentSupabaseUser.id
+        )
+      );
+    }
+
+    function handleIncomingLiveNotice(
+      payload,
+      message,
+      refreshFunction
+    ) {
+      refreshFunction();
+
+      if (!payloadWasCreatedByCurrentUser(payload)) {
+        showArrivalToast(message);
+        playInAppAlertSound();
+      }
+    }
+
+    function removeRealtimeChannels() {
+      realtimeChannels.forEach(channel => {
+        try {
+          window.db.removeChannel(channel);
+        } catch (error) {
+          console.warn(
+            "Could not remove realtime channel:",
+            error
+          );
+        }
+      });
+
+      realtimeChannels = [];
+      realtimeChannelStates.clear();
+      updateRealtimeStatus();
+    }
+
+    function scheduleRealtimeReconnect() {
+      clearTimeout(realtimeReconnectTimer);
+
+      const delay = Math.min(
+        1000 *
+          Math.pow(
+            2,
+            Math.min(realtimeReconnectAttempts, 4)
+          ),
+        15000
+      );
+
+      realtimeReconnectAttempts += 1;
+
+      realtimeReconnectTimer = setTimeout(() => {
+        setupRealtimeSubscriptions().catch(error => {
+          console.error(
+            "Realtime reconnect failed:",
+            error
+          );
+          scheduleRealtimeReconnect();
+        });
+      }, delay);
+    }
+
+    function createRealtimeTableChannel(
+      table,
+      handler
+    ) {
+      const channelName =
+        `sunday-league-${table}-${Date.now()}-${Math.random()
+          .toString(16)
+          .slice(2)}`;
+
+      const channel = window.db
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table
+          },
+          handler
+        )
+        .subscribe((status, error) => {
+          realtimeChannelStates.set(
+            channelName,
+            status
+          );
+          updateRealtimeStatus();
+
+          console.log(
+            `Realtime ${table}:`,
+            status,
+            error || ""
+          );
+
+          if (status === "SUBSCRIBED") {
+            realtimeReconnectAttempts = 0;
+            return;
+          }
+
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            if (error) {
+              console.error(
+                `Realtime ${table} error:`,
+                error
+              );
+            }
+            scheduleRealtimeReconnect();
+          }
+        });
+
+      realtimeChannels.push(channel);
+    }
+
+    async function setupRealtimeSubscriptions() {
+      clearTimeout(realtimeReconnectTimer);
+      removeRealtimeChannels();
+
+      const {
+        data: { session },
+        error
+      } = await window.db.auth.getSession();
+
+      if (error) throw error;
+      if (!session) {
+        throw new Error(
+          "No authenticated session for Realtime."
+        );
       }
 
-      matchRealtimeChannel = window.db
-        .channel("sunday-league-shared-board")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "matches"
-          },
-          () => {
-            scheduleMatchRefresh();
-            scheduleMemoryRefresh();
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "match_time_options"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "availability_votes"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "match_availability_responses"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "match_players"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "match_arrival_plans"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "match_arrivals"
-          },
-          payload => {
-            const player = players.find(
-              item => item.id === payload.new.player_id
-            );
+      await window.db.realtime.setAuth(
+        session.access_token
+      );
 
-            showArrivalToast(
-              player
-                ? `📍 ${player.name} has arrived at AIT Football Field`
-                : "📍 A player has arrived at AIT Football Field"
-            );
-            scheduleMatchRefresh();
+      createRealtimeTableChannel(
+        "matches",
+        payload => {
+          scheduleMatchRefresh();
+          scheduleMemoryRefresh();
+
+          if (
+            !payloadWasCreatedByCurrentUser(payload)
+          ) {
+            const message =
+              payload.eventType === "INSERT"
+                ? "⚽ A new match was created"
+                : "⚽ A match was updated";
+
+            showArrivalToast(message);
+            playInAppAlertSound();
           }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "match_arrivals"
-          },
-          scheduleMatchRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "players"
-          },
-          scheduleFullRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "memory_posts"
-          },
-          scheduleMemoryRefresh
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "memory_comments"
-          },
-          scheduleMemoryRefresh
-        )
-        .subscribe(status => {
-          console.log("Sunday League realtime:", status);
-        });
+        }
+      );
+
+      createRealtimeTableChannel(
+        "match_time_options",
+        scheduleMatchRefresh
+      );
+      createRealtimeTableChannel(
+        "availability_votes",
+        scheduleMatchRefresh
+      );
+      createRealtimeTableChannel(
+        "match_availability_responses",
+        scheduleMatchRefresh
+      );
+      createRealtimeTableChannel(
+        "match_players",
+        payload => {
+          handleIncomingLiveNotice(
+            payload,
+            "👕 Team selections were updated",
+            scheduleMatchRefresh
+          );
+        }
+      );
+      createRealtimeTableChannel(
+        "match_arrival_plans",
+        scheduleMatchRefresh
+      );
+      createRealtimeTableChannel(
+        "match_arrivals",
+        payload => {
+          const player = players.find(
+            item =>
+              item.id ===
+              (payload.new?.player_id ||
+                payload.old?.player_id)
+          );
+
+          handleIncomingLiveNotice(
+            payload,
+            player
+              ? `📍 ${player.name} has arrived at AIT Football Field`
+              : "📍 A player has arrived at AIT Football Field",
+            scheduleMatchRefresh
+          );
+        }
+      );
+      createRealtimeTableChannel(
+        "players",
+        scheduleFullRefresh
+      );
+      createRealtimeTableChannel(
+        "memory_posts",
+        payload => {
+          handleIncomingLiveNotice(
+            payload,
+            "📸 A new match memory was shared",
+            scheduleMemoryRefresh
+          );
+        }
+      );
+      createRealtimeTableChannel(
+        "memory_comments",
+        payload => {
+          handleIncomingLiveNotice(
+            payload,
+            "💬 A new memory comment was added",
+            scheduleMemoryRefresh
+          );
+        }
+      );
+
+      updateRealtimeStatus();
+    }
+
+    function startFallbackSynchronization() {
+      clearInterval(fallbackMatchSyncTimer);
+      clearInterval(fallbackFullSyncTimer);
+
+      fallbackMatchSyncTimer = setInterval(() => {
+        if (
+          document.visibilityState === "visible" &&
+          navigator.onLine
+        ) {
+          runMatchSync("5-second backup");
+        }
+      }, 5000);
+
+      fallbackFullSyncTimer = setInterval(() => {
+        if (
+          document.visibilityState === "visible" &&
+          navigator.onLine
+        ) {
+          runFullSync("15-second backup");
+        }
+      }, 15000);
+    }
+
+    async function reconnectAndRefresh(reason) {
+      if (!navigator.onLine) {
+        updateRealtimeStatus();
+        return;
+      }
+
+      try {
+        await runFullSync(reason);
+        await setupRealtimeSubscriptions();
+      } catch (error) {
+        console.error(
+          `Reconnect failed (${reason}):`,
+          error
+        );
+        scheduleRealtimeReconnect();
+      }
+    }
+
+    async function unlockInAppAlertSound() {
+      localStorage.setItem(
+        "sundayLeagueInAppSound",
+        "enabled"
+      );
+
+      if (!alertAudioContext) {
+        const AudioContextClass =
+          window.AudioContext ||
+          window.webkitAudioContext;
+
+        if (!AudioContextClass) {
+          throw new Error(
+            "This browser does not support in-app sound."
+          );
+        }
+
+        alertAudioContext =
+          new AudioContextClass();
+      }
+
+      if (alertAudioContext.state === "suspended") {
+        await alertAudioContext.resume();
+      }
+
+      alertSoundUnlocked =
+        alertAudioContext.state === "running";
+    }
+
+    function playInAppAlertSound() {
+      if (
+        localStorage.getItem(
+          "sundayLeagueInAppSound"
+        ) !== "enabled"
+      ) {
+        return;
+      }
+
+      if (
+        !alertAudioContext ||
+        alertAudioContext.state !== "running" ||
+        !alertSoundUnlocked
+      ) {
+        return;
+      }
+
+      const start = alertAudioContext.currentTime;
+
+      [0, 0.18].forEach((offset, index) => {
+        const oscillator =
+          alertAudioContext.createOscillator();
+        const gain =
+          alertAudioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(
+          index === 0 ? 880 : 660,
+          start + offset
+        );
+
+        gain.gain.setValueAtTime(
+          0.0001,
+          start + offset
+        );
+        gain.gain.exponentialRampToValueAtTime(
+          0.16,
+          start + offset + 0.02
+        );
+        gain.gain.exponentialRampToValueAtTime(
+          0.0001,
+          start + offset + 0.14
+        );
+
+        oscillator.connect(gain);
+        gain.connect(alertAudioContext.destination);
+        oscillator.start(start + offset);
+        oscillator.stop(start + offset + 0.15);
+      });
+    }
+
+    async function testInAppAlertSound() {
+      const feedback =
+        document.getElementById("pushFeedback");
+
+      try {
+        await unlockInAppAlertSound();
+        playInAppAlertSound();
+        feedback.textContent =
+          "In-app sound is enabled. System notification sound still follows your phone settings.";
+      } catch (error) {
+        feedback.textContent =
+          error.message ||
+          "Could not play the test sound.";
+      }
     }
 
     function urlBase64ToUint8Array(base64String) {
@@ -3960,8 +4299,16 @@ ${pageUrl}`;
       serviceWorkerRegistration =
         await navigator.serviceWorker.register(
           "./service-worker.js",
-          { scope: "./" }
+          { scope: "./", updateViaCache: "none" }
         );
+
+      await serviceWorkerRegistration.update();
+
+      if (serviceWorkerRegistration.waiting) {
+        serviceWorkerRegistration.waiting.postMessage({
+          type: "SKIP_WAITING"
+        });
+      }
 
       await navigator.serviceWorker.ready;
       return serviceWorkerRegistration;
@@ -4141,6 +4488,8 @@ ${pageUrl}`;
       feedback.textContent = "";
 
       try {
+        await unlockInAppAlertSound();
+
         if (!serviceWorkerRegistration) {
           await registerPwaServiceWorker();
         }
@@ -4354,6 +4703,13 @@ ${pageUrl}`;
         signedUrl: await createAvatarSignedUrl(imagePath)
       };
     }
+
+    document
+      .getElementById("testNotificationSound")
+      .addEventListener(
+        "click",
+        testInAppAlertSound
+      );
 
     document
       .getElementById("enablePushNotifications")
@@ -4762,6 +5118,98 @@ ${pageUrl}`;
       dateInput.value = getNextSundayBangkok();
     }
 
+    window.addEventListener("online", () => {
+      reconnectAndRefresh("browser online");
+    });
+
+    window.addEventListener("focus", () => {
+      reconnectAndRefresh("window focus");
+    });
+
+    window.addEventListener("pageshow", () => {
+      reconnectAndRefresh("page show");
+    });
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (
+          document.visibilityState === "visible"
+        ) {
+          reconnectAndRefresh(
+            "app became visible"
+          );
+        }
+      }
+    );
+
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        if (
+          localStorage.getItem(
+            "sundayLeagueInAppSound"
+          ) === "enabled"
+        ) {
+          unlockInAppAlertSound().catch(() => {});
+        }
+      },
+      { passive: true }
+    );
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener(
+        "message",
+        event => {
+          if (
+            event.data?.type ===
+            "SUNDAY_LEAGUE_PUSH_RECEIVED"
+          ) {
+            showArrivalToast(
+              event.data.payload?.body ||
+              "Sunday League update"
+            );
+            playInAppAlertSound();
+            runFullSync("push received");
+          }
+        }
+      );
+
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        () => {
+          if (!window.__reloadingForNewServiceWorker) {
+            window.__reloadingForNewServiceWorker = true;
+            location.reload();
+          }
+        }
+      );
+    }
+
+    window.db.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.access_token) {
+          await window.db.realtime.setAuth(
+            session.access_token
+          );
+        }
+
+        if (
+          event === "TOKEN_REFRESHED" ||
+          event === "SIGNED_IN"
+        ) {
+          setupRealtimeSubscriptions().catch(
+            error => {
+              console.error(
+                "Realtime auth refresh failed:",
+                error
+              );
+            }
+          );
+        }
+      }
+    );
+
     async function bootstrapApplication() {
       const notificationMatchId =
         new URLSearchParams(location.search)
@@ -4794,7 +5242,8 @@ ${pageUrl}`;
         await loadMemoryMatchesFromSupabase();
         await loadMemoriesFromSupabase();
         await updatePushNotificationUI();
-        setupRealtimeSubscriptions();
+        await setupRealtimeSubscriptions();
+        startFallbackSynchronization();
       } catch (error) {
         console.error("Application startup failed:", error);
         document.getElementById("profileConnectionStatus")
