@@ -901,7 +901,7 @@
       <div class="hero-copy">
         <div class="private-badge">🔒 Friends only</div>
         <h1>Our Sunday. Our teams.</h1>
-        <p>Create the match, pick a side, and keep the memories. No public sign-up and no player login.</p>
+        <p>Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board.</p>
       </div>
     </header>
 
@@ -1154,7 +1154,7 @@
 
         <article class="create-card">
           <h3>Match information</h3>
-          <p>This currently updates only this device. Shared online data will be connected later.</p>
+          <p>The match, time options, votes, confirmed time, and teams are saved to Supabase for the whole group.</p>
 
           <div class="field">
             <label for="newTitle">Match title</label>
@@ -1190,7 +1190,7 @@
         </article>
 
         <div class="privacy-note">
-          Future organizer controls can use a simple edit PIN. Players will only need the private group link to vote and choose a team.
+          The friend who creates a match becomes its organizer and confirms the final time after at least three players agree.
         </div>
       </section>
     </main>
@@ -1226,7 +1226,7 @@
       </div>
       <div class="privacy-note">
         This interface is designed only for your friends. Friends register their own player profile through the private group link. There is no public recruitment or contact form.
-        The final version can use one private link and an organizer edit PIN.
+        The group uses one private link. The match creator controls final time confirmation.
       </div>
     </div>
   </div>
@@ -1235,23 +1235,45 @@
   <script src="./supabase-client.js"></script>
   <script>
     const players = [];
-
-    const fixedMatchDate = "2026-07-26";
-    const timeOptions = ["17:00", "18:00", "19:00", "20:00"];
     const minimumPlayers = 3;
-    let confirmedTime = null;
-    let selectedTeam = "A";
-    const availabilityVotes = {};
-    let teamAName = "Team A";
-    let teamBName = "Team B";
-    let selectedMemoryDataUrl = "";
+
     let currentSupabaseUser = null;
     let currentOwnedPlayerId = null;
     let pendingProfileFile = null;
+    let pendingProfileImage = null;
+    let selectedMemoryDataUrl = "";
 
+    let activeMatch = null;
+    let activeTimeOptions = [];
+    let timeOptions = [];
+    let confirmedTime = null;
+    let availabilityVotes = {};
+    let selectedAvailability = new Set();
+    let selectedTeam = "A";
+    let teamAName = "Team A";
+    let teamBName = "Team B";
+    let matchRealtimeChannel = null;
+    let matchRefreshTimer = null;
+    let fullRefreshTimer = null;
+
+    const availabilityOptions = document.getElementById("availabilityOptions");
+    const profileEditor = document.getElementById("profileEditor");
+    const profileName = document.getElementById("profileName");
+    const profileNumber = document.getElementById("profileNumber");
+    const profilePosition = document.getElementById("profilePosition");
+    const profileDescription = document.getElementById("profileDescription");
+    const profileImage = document.getElementById("profileImage");
+    const profilePreview = document.getElementById("profilePreview");
+    const profilePreviewWrap = document.getElementById("profilePreviewWrap");
 
     function initials(name) {
-      return name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
+      return String(name || "?")
+        .split(" ")
+        .filter(Boolean)
+        .map(part => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
     }
 
     function escapeHtml(value) {
@@ -1264,47 +1286,100 @@
       })[character]);
     }
 
+    function normalizeTime(value) {
+      if (!value) return null;
+      const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+      if (!match) return null;
+
+      const hour = Number(match[1]);
+      const minute = Number(match[2]);
+
+      if (
+        !Number.isInteger(hour) ||
+        !Number.isInteger(minute) ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59
+      ) {
+        return null;
+      }
+
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+
+    function formatTime(value) {
+      const normalized = normalizeTime(value);
+      if (!normalized) return "—";
+
+      const [hour, minute] = normalized.split(":").map(Number);
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const displayHour = hour % 12 || 12;
+
+      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+
+    function getBangkokDateParts(date = new Date()) {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(date);
+
+      return Object.fromEntries(
+        parts
+          .filter(part => part.type !== "literal")
+          .map(part => [part.type, part.value])
+      );
+    }
+
+    function getTodayBangkok() {
+      const parts = getBangkokDateParts();
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    }
+
+    function getNextSundayBangkok() {
+      const today = getTodayBangkok();
+      const date = new Date(`${today}T00:00:00Z`);
+      const day = date.getUTCDay();
+      const daysUntilSunday = day === 0 ? 7 : 7 - day;
+      date.setUTCDate(date.getUTCDate() + daysUntilSunday);
+      return date.toISOString().slice(0, 10);
+    }
+
+    function formatMatchDate(dateValue) {
+      if (!dateValue) return "No upcoming match";
+
+      return new Date(`${dateValue}T12:00:00+07:00`).toLocaleDateString(
+        "en-GB",
+        {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "Asia/Bangkok"
+        }
+      );
+    }
+
     function getCurrentPlayer() {
       return players.find(player => player.id === currentOwnedPlayerId) || null;
     }
 
-    function updateAutomaticIdentityUI() {
-      const currentPlayer = getCurrentPlayer();
-      const displayName = currentPlayer
-        ? `${currentPlayer.name} · No. ${currentPlayer.number ?? "—"}`
-        : "Register a player profile first";
-      const commentName = currentPlayer
-        ? currentPlayer.name
-        : "register first";
+    function getActiveOptionByTime(time) {
+      const normalized = normalizeTime(time);
+      return activeTimeOptions.find(
+        option => normalizeTime(option.start_time) === normalized
+      ) || null;
+    }
 
-      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName"].forEach(id => {
-        const element = document.getElementById(id);
-        if (element) element.textContent = displayName;
-      });
-
-      document.querySelectorAll(".commentIdentityName").forEach(element => {
-        element.textContent = commentName;
-      });
-
-      const hasProfile = Boolean(currentPlayer);
-      document.getElementById("saveAvailability").disabled = !hasProfile;
-      document.getElementById("saveVote").disabled = !hasProfile;
-      document.getElementById("postMemory").disabled = !hasProfile;
-      document.querySelectorAll(".comment-button").forEach(button => {
-        button.disabled = !hasProfile;
-      });
-      document.querySelectorAll(".team-pick").forEach(button => {
-        button.disabled = !hasProfile;
-      });
-
-      if (currentPlayer) {
-        selectedAvailability = new Set(
-          availabilityVotes[currentPlayer.id] || []
-        );
-        if (typeof renderAvailabilityOptions === "function") {
-          renderAvailabilityOptions();
-        }
-      }
+    function isCurrentUserOrganizer() {
+      return Boolean(
+        activeMatch &&
+        currentSupabaseUser &&
+        activeMatch.created_by === currentSupabaseUser.id
+      );
     }
 
     async function createAvatarSignedUrl(imagePath) {
@@ -1320,6 +1395,28 @@
       }
 
       return data.signedUrl;
+    }
+
+    function renderProfiles() {
+      const currentUserId = currentSupabaseUser?.id;
+
+      document.getElementById("playerProfiles").innerHTML = players.length
+        ? players.map((player, index) => `
+          <article class="profile-card">
+            ${player.photo
+              ? `<img class="profile-photo" src="${player.photo}" alt="${escapeHtml(player.name)} profile photo" style="object-fit:cover">`
+              : `<div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(player.name)}</div>`}
+            <div class="profile-content">
+              <h3>${escapeHtml(player.name)} · No. ${player.number ?? "—"}</h3>
+              <p>${escapeHtml(player.note || "No description yet.")}</p>
+              <div class="tags">
+                <span class="tag">${escapeHtml(player.role || "Anywhere")}</span>
+                <span class="tag">${player.ownerId === currentUserId ? "You" : "Registered"}</span>
+              </div>
+            </div>
+          </article>
+        `).join("")
+        : `<div class="notice">No players have registered yet.</div>`;
     }
 
     async function loadRegisteredPlayersFromSupabase() {
@@ -1356,10 +1453,7 @@
         null;
 
       renderProfiles();
-      renderTeams();
       updateProfileForm();
-      updateAutomaticIdentityUI();
-
       document.getElementById("profileConnectionStatus").textContent =
         "Supabase connected";
     }
@@ -1381,9 +1475,9 @@
       profileNumber.value = player.number ?? "";
       profilePosition.value = player.role || "Anywhere";
       profileDescription.value = player.note || "";
+      profileImage.value = "";
       pendingProfileFile = null;
       pendingProfileImage = null;
-      profileImage.value = "";
 
       if (player.photo) {
         profilePreview.src = player.photo;
@@ -1400,509 +1494,969 @@
       const title = document.getElementById("profileFormTitle");
       const button = document.getElementById("saveProfile");
 
-      document.getElementById("profileEditor").style.display = "block";
+      profileEditor.style.display = "block";
 
       if (player) {
         title.textContent = "Edit your profile";
         state.textContent =
-          `Signed in as ${player.name}. This identity is automatically used throughout the app.`;
+          `Signed in as ${player.name}. This identity is used automatically for matches, memories, and comments.`;
         button.textContent = "Save My Profile";
         fillProfileEditor(player);
       } else {
         title.textContent = "Create your profile";
         state.textContent =
-          "Register once on this browser. Your profile will automatically be used for voting, teams, memories, and comments.";
+          "Register once on this browser. Your identity will then be used automatically throughout the app.";
         button.textContent = "Register My Profile";
         clearProfileForm();
       }
     }
 
-    function renderTeams() {
-      const playing = players.filter(p => p.status === "playing" && (!confirmedTime || (availabilityVotes[p.id] || []).includes(confirmedTime)));
-      const teamA = playing.filter(p => p.team === "A");
-      const teamB = playing.filter(p => p.team === "B");
+    function updateAutomaticIdentityUI() {
+      const currentPlayer = getCurrentPlayer();
+      const displayName = currentPlayer
+        ? `${currentPlayer.name} · No. ${currentPlayer.number ?? "—"}`
+        : "Register a player profile first";
+      const commentName = currentPlayer
+        ? currentPlayer.name
+        : "register first";
 
-      const markup = list => list.length
-        ? list.map(p => `<div class="player-chip"><div class="avatar">${initials(p.name)}</div><div><strong>${p.name}</strong><small>${p.role}</small></div></div>`).join("")
-        : `<div class="empty">No players yet</div>`;
-
-      document.getElementById("teamAList").innerHTML = markup(teamA);
-      document.getElementById("teamBList").innerHTML = markup(teamB);
-      document.getElementById("playingCount").textContent = playing.length;
-      document.getElementById("teamACount").textContent = teamA.length;
-      document.getElementById("teamBCount").textContent = teamB.length;
-      document.getElementById("aBadge").textContent = teamA.length;
-      document.getElementById("bBadge").textContent = teamB.length;
-
-      const difference = Math.abs(teamA.length - teamB.length);
-      const balance = document.getElementById("balanceText");
-      const notice = document.getElementById("teamNotice");
-
-      if (difference === 0) {
-        balance.textContent = "Balanced teams";
-        notice.textContent = "Teams currently have equal numbers. Position balance can be handled by the organizer later.";
-      } else if (difference === 1) {
-        balance.textContent = "Almost balanced";
-        notice.textContent = "The teams differ by one player. This is usually fine while voting is still open.";
-      } else {
-        balance.textContent = "Needs balancing";
-        notice.textContent = `The teams differ by ${difference} players. Move someone before the match starts.`;
-      }
-    }
-
-    function renderProfiles() {
-      document.getElementById("playerProfiles").innerHTML = players.map((p, index) => `
-        <article class="profile-card">
-          ${p.photo
-            ? `<img class="profile-photo" src="${p.photo}" alt="${escapeHtml(p.name)} profile photo" style="object-fit:cover">`
-            : `<div class="profile-photo" style="background-color:${index % 2 ? "#225fcd" : "#186847"}">${initials(p.name)}</div>`}
-          <div class="profile-content">
-            <h3>${escapeHtml(p.name)} · No. ${p.number ?? "—"}</h3>
-            <p>${escapeHtml(p.note || "No description yet.")}</p>
-            <div class="tags">
-              <span class="tag">${escapeHtml(p.role || "Anywhere")}</span>
-              <span class="tag">${p.ownerId ? "Claimed" : "Unclaimed"}</span>
-            </div>
-          </div>
-        </article>
-      `).join("");
-    }
-
-
-    document.querySelectorAll("[data-team]").forEach(button => {
-      button.addEventListener("click", () => {
-        selectedTeam = button.dataset.team;
-        document.querySelectorAll("[data-team]").forEach(b => b.classList.toggle("active", b === button));
+      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName"].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = displayName;
       });
-    });
 
-    document.getElementById("saveVote").addEventListener("click", () => {
-      const player = getCurrentPlayer();
-      const feedback = document.getElementById("feedback");
+      document.querySelectorAll(".commentIdentityName").forEach(element => {
+        element.textContent = commentName;
+      });
 
-      if (!confirmedTime) {
-        feedback.textContent = "The match time must be confirmed first.";
-        return;
-      }
+      const hasProfile = Boolean(currentPlayer);
+      const canVoteAvailability =
+        hasProfile && activeMatch?.status === "voting";
+      const canChooseTeam =
+        hasProfile && activeMatch?.status === "confirmed";
 
-      if (!player) {
-        feedback.textContent = "Register your player profile first.";
-        return;
-      }
+      document.getElementById("saveAvailability").disabled =
+        !canVoteAvailability;
+      document.getElementById("saveVote").disabled =
+        !canChooseTeam;
+      document.getElementById("postMemory").disabled =
+        !hasProfile;
 
-      const isAvailable =
-        (availabilityVotes[player.id] || []).includes(confirmedTime);
+      document.querySelectorAll(".comment-button").forEach(button => {
+        button.disabled = !hasProfile;
+      });
 
-      if (!isAvailable) {
-        feedback.textContent =
-          `${player.name} did not select ${formatTime(confirmedTime)} as available.`;
-        return;
-      }
+      document.querySelectorAll(".team-pick").forEach(button => {
+        button.disabled = !canChooseTeam;
+        button.classList.toggle(
+          "active",
+          button.dataset.team === selectedTeam
+        );
+      });
 
-      player.status = "playing";
-      player.team = selectedTeam;
-      renderTeams();
-      feedback.textContent =
-        `${player.name} joined ${selectedTeam === "A" ? teamAName : teamBName}.`;
+      if (currentPlayer) {
+        selectedAvailability = new Set(
+          availabilityVotes[currentPlayer.id] || []
+        );
 
-      setTimeout(() => feedback.textContent = "", 3500);
-    });
-
-    function updateCountdown() {
-      if (!confirmedTime) {
-        ["days","hours","minutes","seconds"].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.textContent = "00";
-        });
-        return;
-      }
-      const matchDate = new Date(`${fixedMatchDate}T${confirmedTime}:00+07:00`);
-      const distance = Math.max(0, matchDate.getTime() - Date.now());
-      document.getElementById("days").textContent = String(Math.floor(distance / 86400000)).padStart(2, "0");
-      document.getElementById("hours").textContent = String(Math.floor((distance % 86400000) / 3600000)).padStart(2, "0");
-      document.getElementById("minutes").textContent = String(Math.floor((distance % 3600000) / 60000)).padStart(2, "0");
-      document.getElementById("seconds").textContent = String(Math.floor((distance % 60000) / 1000)).padStart(2, "0");
-    }
-
-
-
-    function buildShareMessage() {
-      const title = document.getElementById("matchTitle").textContent;
-      const dateText = document.getElementById("fixedDateText").textContent;
-      const timeText = confirmedTime
-        ? formatTime(confirmedTime)
-        : "Time voting is still open";
-      const pageUrl = location.protocol === "http:" || location.protocol === "https:"
-        ? window.location.href
-        : "[Add the deployed website link here]";
-
-      return `⚽ ${title}
-📅 ${dateText}
-⏰ ${timeText}
-📍 AIT Football Field
-🔵 ${teamAName} vs 🔴 ${teamBName}
-
-Open the match link to vote for a time and join:
-${pageUrl}`;
-    }
-
-    function openShareFallback(message, helpText) {
-      document.getElementById("shareText").value = message;
-      document.getElementById("shareHelp").textContent = helpText || "Copy the message, open Messenger, and paste it into your group.";
-      document.getElementById("shareModal").classList.add("open");
-    }
-
-    const shareMatchButton = document.getElementById("shareMatch");
-    if (shareMatchButton) shareMatchButton.addEventListener("click", async () => {
-      const title = document.getElementById("matchTitle").textContent;
-      const text = buildShareMessage();
-      const canNativeShare = typeof navigator.share === "function" && window.isSecureContext && /^https?:$/.test(location.protocol);
-
-      if (!canNativeShare) {
-        openShareFallback(text, "This preview is not a public HTTPS page, so iPhone cannot open the native share sheet here. Copy the message, then open Messenger and paste it into your group.");
-        return;
-      }
-
-      try {
-        await navigator.share({ title, text });
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          openShareFallback(text, "Native sharing was blocked by this browser. Copy the message and paste it into your Messenger group.");
+        if (currentPlayer.team) {
+          selectedTeam = currentPlayer.team;
         }
-      }
-    });
-
-    document.getElementById("copyShareText").addEventListener("click", async () => {
-      const textarea = document.getElementById("shareText");
-      let copied = false;
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-        copied = true;
-      } catch (_) {
-        textarea.focus();
-        textarea.select();
-        copied = document.execCommand("copy");
-      }
-      document.getElementById("shareHelp").textContent = copied
-        ? "Message copied. Tap Open Messenger, choose your group, and paste it."
-        : "Select the message manually, copy it, and paste it into Messenger.";
-    });
-
-    document.getElementById("memoryPhoto").addEventListener("change", event => {
-      const file = event.target.files[0];
-      const preview = document.getElementById("memoryPreview");
-      if (!file) {
-        selectedMemoryDataUrl = "";
-        preview.hidden = true;
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        selectedMemoryDataUrl = reader.result;
-        preview.src = selectedMemoryDataUrl;
-        preview.hidden = false;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    document.getElementById("postMemory").addEventListener("click", () => {
-      const player = getCurrentPlayer();
-      const commentText = document.getElementById("memoryComment").value.trim();
-      const memoryDateValue = document.getElementById("memoryDate").value;
-      const feedback = document.getElementById("memoryFeedback");
-
-      if (!player) {
-        feedback.textContent = "Register your player profile first.";
-        return;
+      } else {
+        selectedAvailability = new Set();
       }
 
-      if (!selectedMemoryDataUrl && !commentText) {
-        feedback.textContent = "Add a photo or write a comment.";
-        return;
-      }
+      renderAvailabilityOptions();
+    }
 
-      const memoryDate = memoryDateValue
-        ? new Date(`${memoryDateValue}T12:00:00+07:00`).toLocaleDateString(
-            "en-GB",
-            {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-              timeZone: "Asia/Bangkok"
-            }
-          )
-        : "Match day not selected";
-
-      const card = document.createElement("article");
-      card.className = "memory-card";
-
-      const photoStyle = selectedMemoryDataUrl
-        ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${selectedMemoryDataUrl}') center/cover;`
-        : `background:linear-gradient(135deg, #123e2c, #07130f);`;
-
-      card.innerHTML = `
-        <div class="memory-photo" style="${photoStyle}">
-          <div>
-            <div class="memory-meta" style="color:rgba(255,255,255,.65)">
-              ${escapeHtml(memoryDate)}
-            </div>
-            <div class="scoreline">Match memory</div>
-          </div>
-        </div>
-        <div class="memory-content">
-          <div class="memory-meta">AIT Football Field</div>
-          <h3>Posted by ${escapeHtml(player.name)}</h3>
-          <p>${escapeHtml(commentText || "Shared a new match photo.")}</p>
-          <div class="memory-comments">
-            <div class="memory-comment">
-              <strong>${escapeHtml(player.name)}:</strong>
-              ${escapeHtml(commentText || "Great Sunday with the group.")}
-            </div>
-          </div>
-          <div class="comment-form">
-            <div class="comment-as">
-              Commenting as
-              <strong class="commentIdentityName">${escapeHtml(player.name)}</strong>
-            </div>
-            <div class="comment-row">
-              <input class="comment-input" placeholder="Write a comment...">
-              <button class="comment-button" type="button">Post</button>
-            </div>
-          </div>
-        </div>`;
-
-      document.getElementById("memoryList").prepend(card);
-      document.getElementById("memoryComment").value = "";
-      document.getElementById("memoryPhoto").value = "";
-      document.getElementById("memoryPreview").hidden = true;
-      selectedMemoryDataUrl = "";
-      feedback.textContent = "Memory added on this device.";
-      updateAutomaticIdentityUI();
-    });
-
-    document.getElementById("memoryList").addEventListener("click", event => {
-      const button = event.target.closest(".comment-button");
-      if (!button) return;
-
-      const player = getCurrentPlayer();
-      const form = button.closest(".comment-form");
-      const input = form.querySelector(".comment-input");
-      const value = input.value.trim();
-
-      if (!player) {
-        input.placeholder = "Register your profile first";
-        return;
-      }
-
-      if (!value) {
-        input.placeholder = "Write a comment first";
-        return;
-      }
-
-      const comment = document.createElement("div");
-      comment.className = "memory-comment";
-      comment.innerHTML =
-        `<strong>${escapeHtml(player.name)}:</strong> ${escapeHtml(value)}`;
-
-      form.previousElementSibling.appendChild(comment);
-      input.value = "";
-      input.placeholder = "Comment posted on this device";
-    });
-
-    updateAutomaticIdentityUI();
-
-    document.getElementById("closeShareModal").addEventListener("click", () => document.getElementById("shareModal").classList.remove("open"));
-    document.getElementById("shareModal").addEventListener("click", event => { if (event.target.id === "shareModal") event.currentTarget.classList.remove("open"); });
-
-    document.querySelectorAll(".nav-item").forEach(item => {
-      item.addEventListener("click", () => {
-        document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i === item));
-        document.querySelectorAll(".screen").forEach(screen => screen.classList.toggle("active", screen.id === item.dataset.screen));
-        window.scrollTo({ top: 0, behavior: "smooth" });
+    function resetPlayerMatchState() {
+      players.forEach(player => {
+        player.team = null;
+        player.status = "maybe";
       });
-    });
+    }
 
-    const modal = document.getElementById("settingsModal");
-    document.getElementById("settingsButton").addEventListener("click", () => modal.classList.add("open"));
-    document.getElementById("closeModal").addEventListener("click", () => modal.classList.remove("open"));
-    modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
+    function setNoActiveMatch() {
+      activeMatch = null;
+      activeTimeOptions = [];
+      timeOptions = [];
+      confirmedTime = null;
+      availabilityVotes = {};
+      selectedAvailability = new Set();
+      teamAName = "Team A";
+      teamBName = "Team B";
+      resetPlayerMatchState();
+      updateMatchUI();
+    }
 
+    async function loadActiveMatchFromSupabase() {
+      currentSupabaseUser = await window.supabaseReady;
+      const today = getTodayBangkok();
 
+      const { data: match, error: matchError } = await window.db
+        .from("matches")
+        .select(
+          "id, created_by, title, match_date, location, team_a_name, team_b_name, status, confirmed_time, created_at"
+        )
+        .in("status", ["voting", "confirmed"])
+        .gte("match_date", today)
+        .order("match_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-    const availabilityOptions = document.getElementById("availabilityOptions");
-    let selectedAvailability = new Set();
+      if (matchError) throw matchError;
 
-    function formatTime(value) {
-      const [hour, minute] = value.split(":").map(Number);
-      const suffix = hour >= 12 ? "PM" : "AM";
-      const displayHour = hour % 12 || 12;
-      return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+      if (!match) {
+        setNoActiveMatch();
+        return;
+      }
+
+      const { data: optionRows, error: optionError } = await window.db
+        .from("match_time_options")
+        .select("id, match_id, start_time")
+        .eq("match_id", match.id)
+        .order("start_time", { ascending: true });
+
+      if (optionError) throw optionError;
+
+      const optionIds = optionRows.map(option => option.id);
+
+      const votesPromise = optionIds.length
+        ? window.db
+            .from("availability_votes")
+            .select("time_option_id, player_id")
+            .in("time_option_id", optionIds)
+        : Promise.resolve({ data: [], error: null });
+
+      const teamsPromise = window.db
+        .from("match_players")
+        .select("player_id, team")
+        .eq("match_id", match.id);
+
+      const [
+        { data: voteRows, error: voteError },
+        { data: teamRows, error: teamError }
+      ] = await Promise.all([votesPromise, teamsPromise]);
+
+      if (voteError) throw voteError;
+      if (teamError) throw teamError;
+
+      activeMatch = match;
+      activeTimeOptions = optionRows;
+      timeOptions = optionRows
+        .map(option => normalizeTime(option.start_time))
+        .filter(Boolean);
+      confirmedTime = normalizeTime(match.confirmed_time);
+      teamAName = match.team_a_name || "Team A";
+      teamBName = match.team_b_name || "Team B";
+      availabilityVotes = {};
+
+      const optionTimeById = Object.fromEntries(
+        optionRows.map(option => [
+          option.id,
+          normalizeTime(option.start_time)
+        ])
+      );
+
+      voteRows.forEach(vote => {
+        const time = optionTimeById[vote.time_option_id];
+        if (!time) return;
+
+        if (!availabilityVotes[vote.player_id]) {
+          availabilityVotes[vote.player_id] = [];
+        }
+
+        if (!availabilityVotes[vote.player_id].includes(time)) {
+          availabilityVotes[vote.player_id].push(time);
+        }
+      });
+
+      resetPlayerMatchState();
+
+      teamRows.forEach(row => {
+        const player = players.find(item => item.id === row.player_id);
+        if (!player) return;
+        player.team = row.team;
+        player.status = "playing";
+      });
+
+      if (confirmedTime) {
+        players.forEach(player => {
+          if (player.team) return;
+
+          player.status = (availabilityVotes[player.id] || [])
+            .includes(confirmedTime)
+              ? "available"
+              : "out";
+        });
+      }
+
+      const currentPlayer = getCurrentPlayer();
+      selectedAvailability = new Set(
+        currentPlayer
+          ? availabilityVotes[currentPlayer.id] || []
+          : []
+      );
+      selectedTeam = currentPlayer?.team || "A";
+
+      updateMatchUI();
+    }
+
+    function updateMatchUI() {
+      const matchTitle = document.getElementById("matchTitle");
+      const matchStatus = document.getElementById("matchStatus");
+      const fixedDateText = document.getElementById("fixedDateText");
+      const timeStateText = document.getElementById("timeStateText");
+      const preConfirmSummary = document.getElementById("preConfirmSummary");
+      const confirmedSummary = document.getElementById("confirmedSummary");
+      const joinConfirmedCard = document.getElementById("joinConfirmedCard");
+      const teamsCard = document.getElementById("teamsCard");
+
+      if (!activeMatch) {
+        matchTitle.textContent = "No upcoming match";
+        matchStatus.textContent = "No match";
+        fixedDateText.textContent = "Create the next match";
+        timeStateText.textContent =
+          "Open the Create tab to start a shared availability poll";
+        preConfirmSummary.style.display = "block";
+        confirmedSummary.style.display = "none";
+        joinConfirmedCard.style.display = "none";
+        teamsCard.style.display = "none";
+
+        document.getElementById("voterCount").textContent = "0";
+        document.getElementById("leadingTime").textContent = "—";
+        document.getElementById("leadingVotes").textContent = "0";
+        document.getElementById("timeResults").innerHTML = "";
+        document.getElementById("timeNotice").textContent =
+          "No active match is available yet.";
+
+        renderAvailabilityOptions();
+        renderTeams();
+        updateCountdown();
+        updateAutomaticIdentityUI();
+        return;
+      }
+
+      matchTitle.textContent = activeMatch.title;
+      fixedDateText.textContent = formatMatchDate(activeMatch.match_date);
+      document.getElementById("teamALabel").textContent = teamAName;
+      document.getElementById("teamBLabel").textContent = teamBName;
+      document.getElementById("teamAHeading").textContent = teamAName;
+      document.getElementById("teamBHeading").textContent = teamBName;
+      document.getElementById("teamAPickName").textContent = teamAName;
+      document.getElementById("teamBPickName").textContent = teamBName;
+
+      if (activeMatch.status === "confirmed" && confirmedTime) {
+        matchStatus.textContent = "Time confirmed";
+        timeStateText.textContent =
+          `${formatTime(confirmedTime)} confirmed`;
+        document.getElementById("confirmedTimeLabel").textContent =
+          `${formatTime(confirmedTime)} confirmed`;
+        preConfirmSummary.style.display = "none";
+        confirmedSummary.style.display = "block";
+        joinConfirmedCard.style.display = "block";
+        teamsCard.style.display = "block";
+      } else {
+        matchStatus.textContent = "Time voting";
+        timeStateText.textContent =
+          "Choose every time you are available";
+        preConfirmSummary.style.display = "block";
+        confirmedSummary.style.display = "none";
+        joinConfirmedCard.style.display = "none";
+        teamsCard.style.display = "none";
+      }
+
+      renderAvailabilityOptions();
+      renderTimeResults();
+      renderTeams();
+      updateCountdown();
+      updateAutomaticIdentityUI();
     }
 
     function renderAvailabilityOptions() {
+      if (!activeMatch) {
+        availabilityOptions.innerHTML =
+          `<div class="notice" style="grid-column:1/-1">No active match. Create the next match first.</div>`;
+        return;
+      }
+
+      if (!timeOptions.length) {
+        availabilityOptions.innerHTML =
+          `<div class="notice" style="grid-column:1/-1">No time options were added to this match.</div>`;
+        return;
+      }
+
+      const canEdit =
+        Boolean(getCurrentPlayer()) &&
+        activeMatch.status === "voting";
+
       availabilityOptions.innerHTML = timeOptions.map(time => `
         <button
           type="button"
           class="availability-option ${selectedAvailability.has(time) ? "active" : ""}"
           data-time="${time}"
+          ${canEdit ? "" : "disabled"}
         >
           <strong>${formatTime(time)}</strong>
-          <span>Tap if available</span>
+          <span>${activeMatch.status === "voting" ? "Tap if available" : "Voting closed"}</span>
         </button>
       `).join("");
 
-      availabilityOptions.querySelectorAll("[data-time]").forEach(button => {
-        button.disabled = !getCurrentPlayer();
-        button.addEventListener("click", () => {
-          const time = button.dataset.time;
+      availabilityOptions
+        .querySelectorAll("[data-time]")
+        .forEach(button => {
+          button.addEventListener("click", () => {
+            const time = button.dataset.time;
 
-          if (selectedAvailability.has(time)) {
-            selectedAvailability.delete(time);
-          } else {
-            selectedAvailability.add(time);
-          }
+            if (selectedAvailability.has(time)) {
+              selectedAvailability.delete(time);
+            } else {
+              selectedAvailability.add(time);
+            }
 
-          renderAvailabilityOptions();
+            renderAvailabilityOptions();
+          });
         });
-      });
     }
 
-    document.getElementById("saveAvailability").addEventListener("click", () => {
-      const player = getCurrentPlayer();
-      const feedback = document.getElementById("availabilityFeedback");
-
-      if (!player) {
-        feedback.textContent = "Register your player profile first.";
-        return;
-      }
-
-      if (!selectedAvailability.size) {
-        feedback.textContent = "Select at least one available time.";
-        return;
-      }
-
-      availabilityVotes[player.id] = [...selectedAvailability];
-      feedback.textContent =
-        `${player.name}'s availability has been saved on this device.`;
-      renderTimeResults();
-    });
-
     function renderTimeResults() {
+      if (!activeMatch || !activeTimeOptions.length) {
+        document.getElementById("timeResults").innerHTML = "";
+        return;
+      }
+
       const voterIds = Object.keys(availabilityVotes);
-      const counts = timeOptions.map(time => {
-        const availableIds = voterIds.filter(id => availabilityVotes[id].includes(time));
-        return { time, availableIds };
+      const counts = activeTimeOptions.map(option => {
+        const time = normalizeTime(option.start_time);
+        const availableIds = voterIds.filter(
+          playerId =>
+            (availabilityVotes[playerId] || []).includes(time)
+        );
+
+        return {
+          optionId: option.id,
+          time,
+          availableIds
+        };
       });
 
-      const maxVotes = Math.max(0, ...counts.map(item => item.availableIds.length));
-      const leading = counts.find(item => item.availableIds.length === maxVotes && maxVotes > 0);
+      const maxVotes = Math.max(
+        0,
+        ...counts.map(item => item.availableIds.length)
+      );
+      const leading = counts.find(
+        item =>
+          item.availableIds.length === maxVotes &&
+          maxVotes > 0
+      );
 
-      document.getElementById("voterCount").textContent = voterIds.length;
-      document.getElementById("leadingTime").textContent = leading ? formatTime(leading.time) : "—";
-      document.getElementById("leadingVotes").textContent = leading ? leading.availableIds.length : 0;
+      document.getElementById("voterCount").textContent =
+        voterIds.length;
+      document.getElementById("leadingTime").textContent =
+        leading ? formatTime(leading.time) : "—";
+      document.getElementById("leadingVotes").textContent =
+        leading ? leading.availableIds.length : "0";
+
+      const organizer = isCurrentUserOrganizer();
 
       document.getElementById("timeResults").innerHTML = counts.map(item => {
-        const names = item.availableIds.map(id => players.find(p => p.id === id)?.name).filter(Boolean);
-        const reached = item.availableIds.length >= minimumPlayers;
-        const isLeading = leading && item.time === leading.time;
+        const names = item.availableIds
+          .map(id => players.find(player => player.id === id)?.name)
+          .filter(Boolean);
+        const reached =
+          item.availableIds.length >= minimumPlayers;
+        const isLeading =
+          leading && item.optionId === leading.optionId;
+        const canConfirm =
+          reached &&
+          activeMatch.status === "voting" &&
+          organizer;
+
         return `
           <div class="time-result ${reached ? "reached" : ""} ${isLeading ? "leading" : ""}">
             <div class="time-result-head">
               <strong>${formatTime(item.time)}</strong>
               <span class="time-result-count">${item.availableIds.length} available</span>
             </div>
-            <div class="time-result-names">${names.length ? names.join(", ") : "No players yet"}</div>
-            ${reached && !confirmedTime ? `<button type="button" class="confirm-time" data-confirm-time="${item.time}">Confirm ${formatTime(item.time)}</button>` : ""}
+            <div class="time-result-names">
+              ${names.length ? names.map(escapeHtml).join(", ") : "No players yet"}
+            </div>
+            ${canConfirm
+              ? `<button type="button" class="confirm-time" data-option-id="${item.optionId}">Confirm ${formatTime(item.time)}</button>`
+              : ""}
           </div>
         `;
       }).join("");
 
-      document.querySelectorAll("[data-confirm-time]").forEach(button => {
-        button.addEventListener("click", () => confirmMatchTime(button.dataset.confirmTime));
-      });
+      document
+        .querySelectorAll("[data-option-id]")
+        .forEach(button => {
+          button.addEventListener("click", () =>
+            confirmMatchTime(button.dataset.optionId)
+          );
+        });
 
-      const reachedOptions = counts.filter(item => item.availableIds.length >= minimumPlayers);
+      const reachedOptions = counts.filter(
+        item => item.availableIds.length >= minimumPlayers
+      );
       const notice = document.getElementById("timeNotice");
-      if (confirmedTime) {
-        notice.textContent = `${formatTime(confirmedTime)} is confirmed. Only players available at this time can join teams.`;
+
+      if (activeMatch.status === "confirmed" && confirmedTime) {
+        notice.textContent =
+          `${formatTime(confirmedTime)} is confirmed. Only players who voted for this time can choose a team.`;
+      } else if (reachedOptions.length && organizer) {
+        notice.textContent =
+          "The minimum has been reached. As match creator, choose the final time above.";
       } else if (reachedOptions.length) {
-        notice.textContent = "At least one time reached the minimum. The organizer can confirm the best option.";
+        notice.textContent =
+          "The minimum has been reached. Waiting for the match creator to confirm the final time.";
+      } else if (organizer) {
+        notice.textContent =
+          `You created this match. A time needs at least ${minimumPlayers} players before you can confirm it.`;
       } else {
-        notice.textContent = `No time has reached the minimum of ${minimumPlayers} players yet.`;
+        notice.textContent =
+          `No time has reached the minimum of ${minimumPlayers} players yet.`;
       }
     }
 
-    function confirmMatchTime(time) {
-      confirmedTime = time;
-      document.getElementById("matchStatus").textContent = "Time confirmed";
-      document.getElementById("timeStateText").textContent = `${formatTime(time)} confirmed`;
-      document.getElementById("confirmedTimeLabel").textContent = `${formatTime(time)} confirmed`;
-      document.getElementById("preConfirmSummary").style.display = "none";
-      document.getElementById("confirmedSummary").style.display = "block";
-      document.getElementById("joinConfirmedCard").style.display = "block";
-      document.getElementById("teamsCard").style.display = "block";
+    async function confirmMatchTime(optionId) {
+      const notice = document.getElementById("timeNotice");
 
-      players.forEach(player => {
-        const isAvailable = (availabilityVotes[player.id] || []).includes(time);
-        if (!isAvailable) {
-          player.status = "out";
-          player.team = null;
-        } else if (player.status !== "playing") {
-          player.status = "playing";
-          player.team = player.team || null;
-        }
-      });
-
-      renderTimeResults();
-      renderTeams();
-      updateCountdown();
-    }
-
-    document.getElementById("updateMatch").addEventListener("click", () => {
-      const title = document.getElementById("newTitle").value.trim() || "Sunday Match";
-      const dateValue = document.getElementById("newDate").value;
-      const feedback = document.getElementById("manageFeedback");
-
-      if (!dateValue) {
-        feedback.textContent = "Choose the fixed match date.";
+      if (!activeMatch) {
+        notice.textContent = "No active match is available.";
         return;
       }
 
-      document.getElementById("matchTitle").textContent = title;
-      const date = new Date(`${dateValue}T00:00:00+07:00`);
-      document.getElementById("fixedDateText").textContent = date.toLocaleDateString("en-GB", {
-        weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok"
-      });
-      feedback.textContent = "Availability poll created on this device.";
-    });
+      if (!isCurrentUserOrganizer()) {
+        notice.textContent =
+          "Only the friend who created this match can confirm its time.";
+        return;
+      }
 
-    renderAvailabilityOptions();
-    renderTimeResults();
+      document
+        .querySelectorAll(".confirm-time")
+        .forEach(button => {
+          button.disabled = true;
+        });
 
-    const profileEditor = document.getElementById("profileEditor");
-    const profileName = document.getElementById("profileName");
-    const profileNumber = document.getElementById("profileNumber");
-    const profilePosition = document.getElementById("profilePosition");
-    const profileDescription = document.getElementById("profileDescription");
-    const profileImage = document.getElementById("profileImage");
-    const profilePreview = document.getElementById("profilePreview");
-    const profilePreviewWrap = document.getElementById("profilePreviewWrap");
-    let pendingProfileImage = null;
+      notice.textContent = "Confirming the match time…";
+
+      try {
+        const { error } = await window.db.rpc(
+          "confirm_match_time",
+          {
+            p_match_id: activeMatch.id,
+            p_time_option_id: optionId
+          }
+        );
+
+        if (error) throw error;
+
+        await loadActiveMatchFromSupabase();
+        notice.textContent =
+          `${formatTime(confirmedTime)} is now confirmed for everyone.`;
+      } catch (error) {
+        console.error("Could not confirm match time:", error);
+        notice.textContent =
+          error.message || "Could not confirm the match time.";
+        renderTimeResults();
+      }
+    }
+
+    function renderTeams() {
+      const teamA = players.filter(player => player.team === "A");
+      const teamB = players.filter(player => player.team === "B");
+      const playing = [...teamA, ...teamB];
+
+      const markup = list => list.length
+        ? list.map(player => `
+            <div class="player-chip">
+              ${player.photo
+                ? `<img class="avatar" src="${player.photo}" alt="" style="object-fit:cover">`
+                : `<div class="avatar">${initials(player.name)}</div>`}
+              <div>
+                <strong>${escapeHtml(player.name)}</strong>
+                <small>${escapeHtml(player.role)}</small>
+              </div>
+            </div>
+          `).join("")
+        : `<div class="empty">No players yet</div>`;
+
+      document.getElementById("teamAList").innerHTML =
+        markup(teamA);
+      document.getElementById("teamBList").innerHTML =
+        markup(teamB);
+      document.getElementById("playingCount").textContent =
+        playing.length;
+      document.getElementById("teamACount").textContent =
+        teamA.length;
+      document.getElementById("teamBCount").textContent =
+        teamB.length;
+      document.getElementById("aBadge").textContent =
+        teamA.length;
+      document.getElementById("bBadge").textContent =
+        teamB.length;
+
+      const difference = Math.abs(teamA.length - teamB.length);
+      const balance = document.getElementById("balanceText");
+      const notice = document.getElementById("teamNotice");
+
+      if (!activeMatch || activeMatch.status !== "confirmed") {
+        balance.textContent = "Waiting for time";
+        notice.textContent =
+          "Teams will appear after the match time is confirmed.";
+      } else if (difference === 0) {
+        balance.textContent = "Balanced teams";
+        notice.textContent =
+          "Teams currently have equal numbers.";
+      } else if (difference === 1) {
+        balance.textContent = "Almost balanced";
+        notice.textContent =
+          "The teams differ by one player.";
+      } else {
+        balance.textContent = "Needs balancing";
+        notice.textContent =
+          `The teams differ by ${difference} players.`;
+      }
+    }
+
+    function updateCountdown() {
+      if (!activeMatch || !confirmedTime) {
+        ["days", "hours", "minutes", "seconds"].forEach(id => {
+          const element = document.getElementById(id);
+          if (element) element.textContent = "00";
+        });
+        return;
+      }
+
+      const matchDate = new Date(
+        `${activeMatch.match_date}T${confirmedTime}:00+07:00`
+      );
+      const distance = Math.max(
+        0,
+        matchDate.getTime() - Date.now()
+      );
+
+      document.getElementById("days").textContent =
+        String(Math.floor(distance / 86400000)).padStart(2, "0");
+      document.getElementById("hours").textContent =
+        String(
+          Math.floor((distance % 86400000) / 3600000)
+        ).padStart(2, "0");
+      document.getElementById("minutes").textContent =
+        String(
+          Math.floor((distance % 3600000) / 60000)
+        ).padStart(2, "0");
+      document.getElementById("seconds").textContent =
+        String(
+          Math.floor((distance % 60000) / 1000)
+        ).padStart(2, "0");
+    }
+
+    async function saveAvailabilityToSupabase() {
+      const player = getCurrentPlayer();
+      const feedback =
+        document.getElementById("availabilityFeedback");
+      const saveButton =
+        document.getElementById("saveAvailability");
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile first.";
+        return;
+      }
+
+      if (!activeMatch || activeMatch.status !== "voting") {
+        feedback.textContent =
+          "There is no open availability poll.";
+        return;
+      }
+
+      const allOptionIds = activeTimeOptions.map(
+        option => option.id
+      );
+      const selectedOptionIds = [...selectedAvailability]
+        .map(time => getActiveOptionByTime(time)?.id)
+        .filter(Boolean);
+
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving…";
+      feedback.textContent = "";
+
+      try {
+        if (allOptionIds.length) {
+          const { error: deleteError } = await window.db
+            .from("availability_votes")
+            .delete()
+            .in("time_option_id", allOptionIds)
+            .eq("player_id", player.id);
+
+          if (deleteError) throw deleteError;
+        }
+
+        if (selectedOptionIds.length) {
+          const rows = selectedOptionIds.map(optionId => ({
+            time_option_id: optionId,
+            player_id: player.id,
+            created_by: currentSupabaseUser.id
+          }));
+
+          const { error: insertError } = await window.db
+            .from("availability_votes")
+            .insert(rows);
+
+          if (insertError) throw insertError;
+        }
+
+        await loadActiveMatchFromSupabase();
+
+        feedback.textContent = selectedOptionIds.length
+          ? `${player.name}'s availability is saved for everyone.`
+          : `${player.name}'s availability was cleared.`;
+      } catch (error) {
+        console.error("Could not save availability:", error);
+        feedback.textContent =
+          error.message || "Could not save availability.";
+      } finally {
+        saveButton.textContent = "Save my availability";
+        updateAutomaticIdentityUI();
+      }
+    }
+
+    async function saveTeamChoiceToSupabase() {
+      const player = getCurrentPlayer();
+      const feedback = document.getElementById("feedback");
+      const saveButton = document.getElementById("saveVote");
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile first.";
+        return;
+      }
+
+      if (
+        !activeMatch ||
+        activeMatch.status !== "confirmed" ||
+        !confirmedTime
+      ) {
+        feedback.textContent =
+          "The match time must be confirmed first.";
+        return;
+      }
+
+      const isAvailable =
+        (availabilityVotes[player.id] || [])
+          .includes(confirmedTime);
+
+      if (!isAvailable) {
+        feedback.textContent =
+          `${player.name} did not vote for ${formatTime(confirmedTime)}, so this profile cannot join the teams.`;
+        return;
+      }
+
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving…";
+      feedback.textContent = "";
+
+      try {
+        const { error } = await window.db
+          .from("match_players")
+          .upsert(
+            {
+              match_id: activeMatch.id,
+              player_id: player.id,
+              team: selectedTeam,
+              created_by: currentSupabaseUser.id
+            },
+            {
+              onConflict: "match_id,player_id"
+            }
+          );
+
+        if (error) throw error;
+
+        await loadActiveMatchFromSupabase();
+
+        feedback.textContent =
+          `${player.name} joined ${selectedTeam === "A" ? teamAName : teamBName}. Everyone can now see the update.`;
+      } catch (error) {
+        console.error("Could not save team choice:", error);
+        feedback.textContent =
+          error.message || "Could not save the team choice.";
+      } finally {
+        saveButton.textContent = "Confirm team choice";
+        updateAutomaticIdentityUI();
+      }
+    }
+
+    function parseTimeOptions(value) {
+      const unique = new Set();
+
+      String(value || "")
+        .split(",")
+        .map(item => normalizeTime(item.trim()))
+        .filter(Boolean)
+        .forEach(time => unique.add(time));
+
+      return [...unique].sort();
+    }
+
+    async function createMatchInSupabase() {
+      const player = getCurrentPlayer();
+      const feedback = document.getElementById("manageFeedback");
+      const createButton = document.getElementById("updateMatch");
+      const title =
+        document.getElementById("newTitle").value.trim() ||
+        "Sunday Match";
+      const dateValue =
+        document.getElementById("newDate").value;
+      const newTeamAName =
+        document.getElementById("teamANameInput").value.trim() ||
+        "Team A";
+      const newTeamBName =
+        document.getElementById("teamBNameInput").value.trim() ||
+        "Team B";
+      const parsedTimes = parseTimeOptions(
+        document.getElementById("newTimes").value
+      );
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile before creating a match.";
+        return;
+      }
+
+      if (!dateValue) {
+        feedback.textContent =
+          "Choose the fixed match date.";
+        return;
+      }
+
+      if (dateValue < getTodayBangkok()) {
+        feedback.textContent =
+          "Choose today or a future date.";
+        return;
+      }
+
+      if (!parsedTimes.length) {
+        feedback.textContent =
+          "Enter at least one valid time, such as 17:00, 18:00.";
+        return;
+      }
+
+      createButton.disabled = true;
+      createButton.textContent = "Creating…";
+      feedback.textContent = "";
+
+      let createdMatchId = null;
+
+      try {
+        const { data: createdMatch, error: matchError } =
+          await window.db
+            .from("matches")
+            .insert({
+              created_by: currentSupabaseUser.id,
+              title,
+              match_date: dateValue,
+              location: "AIT Football Field",
+              team_a_name: newTeamAName,
+              team_b_name: newTeamBName,
+              status: "voting"
+            })
+            .select(
+              "id, created_by, title, match_date, location, team_a_name, team_b_name, status, confirmed_time"
+            )
+            .single();
+
+        if (matchError) throw matchError;
+
+        createdMatchId = createdMatch.id;
+
+        const optionRows = parsedTimes.map(time => ({
+          match_id: createdMatch.id,
+          start_time: time
+        }));
+
+        const { error: optionError } = await window.db
+          .from("match_time_options")
+          .insert(optionRows);
+
+        if (optionError) {
+          await window.db
+            .from("matches")
+            .delete()
+            .eq("id", createdMatch.id);
+          throw optionError;
+        }
+
+        await loadActiveMatchFromSupabase();
+
+        feedback.textContent =
+          `Match created for ${formatMatchDate(dateValue)}. The shared poll is now live.`;
+
+        document
+          .querySelector('[data-screen="homeScreen"]')
+          ?.click();
+      } catch (error) {
+        console.error("Could not create match:", error);
+
+        if (
+          error.code === "23505" ||
+          String(error.message || "")
+            .toLowerCase()
+            .includes("duplicate")
+        ) {
+          feedback.textContent =
+            "A match already exists on that date. Choose another date.";
+        } else {
+          feedback.textContent =
+            error.message || "Could not create the match.";
+        }
+      } finally {
+        createButton.disabled = false;
+        createButton.textContent = "Create availability poll";
+      }
+    }
+
+    function buildShareMessage() {
+      if (!activeMatch) {
+        return `⚽ Sunday League
+No upcoming match has been created yet.
+
+Open the group board:
+${window.location.href}`;
+      }
+
+      const timeText = confirmedTime
+        ? formatTime(confirmedTime)
+        : "Time voting is still open";
+      const pageUrl =
+        location.protocol === "http:" ||
+        location.protocol === "https:"
+          ? window.location.href
+          : "[Add the deployed website link here]";
+
+      return `⚽ ${activeMatch.title}
+📅 ${formatMatchDate(activeMatch.match_date)}
+⏰ ${timeText}
+📍 ${activeMatch.location || "AIT Football Field"}
+🔵 ${teamAName} vs 🔴 ${teamBName}
+
+Open the match link to vote and join:
+${pageUrl}`;
+    }
+
+    function openShareFallback(message, helpText) {
+      document.getElementById("shareText").value = message;
+      document.getElementById("shareHelp").textContent =
+        helpText ||
+        "Copy the message, open Messenger, and paste it into your group.";
+      document.getElementById("shareModal").classList.add("open");
+    }
+
+    function scheduleMatchRefresh() {
+      clearTimeout(matchRefreshTimer);
+      matchRefreshTimer = setTimeout(async () => {
+        try {
+          await loadActiveMatchFromSupabase();
+        } catch (error) {
+          console.error("Realtime match refresh failed:", error);
+        }
+      }, 250);
+    }
+
+    function scheduleFullRefresh() {
+      clearTimeout(fullRefreshTimer);
+      fullRefreshTimer = setTimeout(async () => {
+        try {
+          await loadRegisteredPlayersFromSupabase();
+          await loadActiveMatchFromSupabase();
+        } catch (error) {
+          console.error("Realtime full refresh failed:", error);
+        }
+      }, 250);
+    }
+
+    function setupRealtimeSubscriptions() {
+      if (matchRealtimeChannel) {
+        window.db.removeChannel(matchRealtimeChannel);
+      }
+
+      matchRealtimeChannel = window.db
+        .channel("sunday-league-shared-board")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "matches"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "match_time_options"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "availability_votes"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "match_players"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "players"
+          },
+          scheduleFullRefresh
+        )
+        .subscribe(status => {
+          console.log("Sunday League realtime:", status);
+        });
+    }
 
     profileImage.addEventListener("change", () => {
-      const file = profileImage.files && profileImage.files[0];
-      const feedback = document.getElementById("profileFeedback");
+      const file =
+        profileImage.files &&
+        profileImage.files[0];
+      const feedback =
+        document.getElementById("profileFeedback");
 
       if (!file) return;
 
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-        feedback.textContent = "Choose a JPEG, PNG, or WebP image.";
+      if (
+        !["image/jpeg", "image/png", "image/webp"]
+          .includes(file.type)
+      ) {
+        feedback.textContent =
+          "Choose a JPEG, PNG, or WebP image.";
         profileImage.value = "";
         return;
       }
 
       if (file.size > 5 * 1024 * 1024) {
-        feedback.textContent = "Image must be smaller than 5 MB.";
+        feedback.textContent =
+          "Image must be smaller than 5 MB.";
         profileImage.value = "";
         return;
       }
@@ -1929,7 +2483,10 @@ ${pageUrl}`;
       }
 
       const extension =
-        pendingProfileFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        pendingProfileFile.name
+          .split(".")
+          .pop()
+          ?.toLowerCase() || "jpg";
       const imagePath =
         `${currentSupabaseUser.id}/avatar-${Date.now()}.${extension}`;
 
@@ -1949,158 +2506,429 @@ ${pageUrl}`;
       };
     }
 
-    document.getElementById("saveProfile").addEventListener("click", async () => {
-      const feedback = document.getElementById("profileFeedback");
-      const saveButton = document.getElementById("saveProfile");
-      const existingPlayer = getCurrentPlayer();
+    document.getElementById("saveProfile")
+      .addEventListener("click", async () => {
+        const feedback =
+          document.getElementById("profileFeedback");
+        const saveButton =
+          document.getElementById("saveProfile");
+        const existingPlayer = getCurrentPlayer();
 
-      if (!currentSupabaseUser) {
-        feedback.textContent = "Supabase is still connecting.";
-        return;
-      }
-
-      const newName = profileName.value.trim();
-      const newDescription = profileDescription.value.trim();
-      const number = Number(profileNumber.value);
-
-      if (!newName) {
-        feedback.textContent = "Enter your name.";
-        return;
-      }
-
-      if (!Number.isInteger(number) || number < 0 || number > 99) {
-        feedback.textContent = "Choose a shirt number from 0 to 99.";
-        return;
-      }
-
-      if (!newDescription) {
-        feedback.textContent = "Write a short description about yourself.";
-        return;
-      }
-
-      saveButton.disabled = true;
-      saveButton.textContent = existingPlayer ? "Saving…" : "Registering…";
-      feedback.textContent = "";
-
-      try {
-        const avatar = await uploadProfileAvatar(
-          existingPlayer?.imagePath || null
-        );
-
-        let savedRow;
-
-        if (existingPlayer) {
-          const { data, error } = await window.db
-            .from("players")
-            .update({
-              name: newName,
-              shirt_number: number,
-              position: profilePosition.value,
-              description: newDescription,
-              image_path: avatar.imagePath
-            })
-            .eq("id", existingPlayer.id)
-            .eq("owner_id", currentSupabaseUser.id)
-            .select(
-              "id, owner_id, name, shirt_number, position, description, image_path"
-            )
-            .single();
-
-          if (error) throw error;
-          savedRow = data;
-        } else {
-          const { data, error } = await window.db
-            .from("players")
-            .insert({
-              owner_id: currentSupabaseUser.id,
-              name: newName,
-              shirt_number: number,
-              position: profilePosition.value,
-              description: newDescription,
-              image_path: avatar.imagePath
-            })
-            .select(
-              "id, owner_id, name, shirt_number, position, description, image_path"
-            )
-            .single();
-
-          if (error) throw error;
-          savedRow = data;
+        if (!currentSupabaseUser) {
+          feedback.textContent =
+            "Supabase is still connecting.";
+          return;
         }
 
-        let player = existingPlayer;
+        const newName = profileName.value.trim();
+        const newDescription =
+          profileDescription.value.trim();
+        const number = Number(profileNumber.value);
 
-        if (!player) {
-          player = {
-            id: savedRow.id,
-            ownerId: savedRow.owner_id,
-            name: savedRow.name,
-            role: savedRow.position,
-            number: savedRow.shirt_number,
-            note: savedRow.description,
-            imagePath: savedRow.image_path,
-            photo: avatar.signedUrl,
-            team: null,
-            status: "maybe"
-          };
-          players.push(player);
-          currentOwnedPlayerId = player.id;
-        } else {
-          player.ownerId = savedRow.owner_id;
-          player.name = savedRow.name;
-          player.number = savedRow.shirt_number;
-          player.role = savedRow.position;
-          player.note = savedRow.description;
-          player.imagePath = savedRow.image_path;
-          player.photo = avatar.signedUrl || player.photo;
+        if (!newName) {
+          feedback.textContent = "Enter your name.";
+          return;
         }
-
-        pendingProfileFile = null;
-        pendingProfileImage = null;
-
-        renderProfiles();
-        renderTeams();
-        updateProfileForm();
-        updateAutomaticIdentityUI();
-
-        feedback.textContent = existingPlayer
-          ? "Your profile was updated permanently."
-          : "Your profile was registered. The app will now use your name automatically.";
-      } catch (error) {
-        console.error("Profile save failed:", error);
 
         if (
-          error.code === "23505" ||
-          String(error.message || "").includes("players_owner_id_key")
+          !Number.isInteger(number) ||
+          number < 0 ||
+          number > 99
         ) {
           feedback.textContent =
-            "This browser already has a player profile. Refresh the page.";
-        } else {
-          feedback.textContent =
-            error.message || "Could not save your profile.";
+            "Choose a shirt number from 0 to 99.";
+          return;
         }
-      } finally {
-        saveButton.disabled = false;
-        saveButton.textContent = getCurrentPlayer()
-          ? "Save My Profile"
-          : "Register My Profile";
+
+        if (!newDescription) {
+          feedback.textContent =
+            "Write a short description about yourself.";
+          return;
+        }
+
+        saveButton.disabled = true;
+        saveButton.textContent =
+          existingPlayer ? "Saving…" : "Registering…";
+        feedback.textContent = "";
+
+        try {
+          const avatar = await uploadProfileAvatar(
+            existingPlayer?.imagePath || null
+          );
+
+          if (existingPlayer) {
+            const { error } = await window.db
+              .from("players")
+              .update({
+                name: newName,
+                shirt_number: number,
+                position: profilePosition.value,
+                description: newDescription,
+                image_path: avatar.imagePath
+              })
+              .eq("id", existingPlayer.id)
+              .eq("owner_id", currentSupabaseUser.id);
+
+            if (error) throw error;
+          } else {
+            const { error } = await window.db
+              .from("players")
+              .insert({
+                owner_id: currentSupabaseUser.id,
+                name: newName,
+                shirt_number: number,
+                position: profilePosition.value,
+                description: newDescription,
+                image_path: avatar.imagePath
+              });
+
+            if (error) throw error;
+          }
+
+          pendingProfileFile = null;
+          pendingProfileImage = null;
+
+          await loadRegisteredPlayersFromSupabase();
+          await loadActiveMatchFromSupabase();
+
+          feedback.textContent = existingPlayer
+            ? "Your profile was updated permanently."
+            : "Your profile was registered. Your name is now used automatically throughout the app.";
+        } catch (error) {
+          console.error("Profile save failed:", error);
+
+          if (
+            error.code === "23505" ||
+            String(error.message || "")
+              .includes("players_owner_id_key")
+          ) {
+            feedback.textContent =
+              "This browser already has a player profile. Refresh the page.";
+          } else {
+            feedback.textContent =
+              error.message || "Could not save your profile.";
+          }
+        } finally {
+          saveButton.disabled = false;
+          saveButton.textContent = getCurrentPlayer()
+            ? "Save My Profile"
+            : "Register My Profile";
+        }
+      });
+
+    document.querySelectorAll("[data-team]")
+      .forEach(button => {
+        button.addEventListener("click", () => {
+          selectedTeam = button.dataset.team;
+          document.querySelectorAll("[data-team]")
+            .forEach(teamButton => {
+              teamButton.classList.toggle(
+                "active",
+                teamButton === button
+              );
+            });
+        });
+      });
+
+    document.getElementById("saveAvailability")
+      .addEventListener(
+        "click",
+        saveAvailabilityToSupabase
+      );
+
+    document.getElementById("saveVote")
+      .addEventListener(
+        "click",
+        saveTeamChoiceToSupabase
+      );
+
+    document.getElementById("updateMatch")
+      .addEventListener(
+        "click",
+        createMatchInSupabase
+      );
+
+    document.getElementById("shareMatch")
+      .addEventListener("click", async () => {
+        const title = activeMatch?.title || "Sunday League";
+        const text = buildShareMessage();
+        const canNativeShare =
+          typeof navigator.share === "function" &&
+          window.isSecureContext &&
+          /^https?:$/.test(location.protocol);
+
+        if (!canNativeShare) {
+          openShareFallback(
+            text,
+            "Copy the message, then open Messenger and paste it into your group."
+          );
+          return;
+        }
+
+        try {
+          await navigator.share({ title, text });
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            openShareFallback(
+              text,
+              "Native sharing was blocked. Copy the message and paste it into Messenger."
+            );
+          }
+        }
+      });
+
+    document.getElementById("copyShareText")
+      .addEventListener("click", async () => {
+        const textarea =
+          document.getElementById("shareText");
+        let copied = false;
+
+        try {
+          await navigator.clipboard.writeText(
+            textarea.value
+          );
+          copied = true;
+        } catch (_) {
+          textarea.focus();
+          textarea.select();
+          copied = document.execCommand("copy");
+        }
+
+        document.getElementById("shareHelp").textContent =
+          copied
+            ? "Message copied. Tap Open Messenger, choose your group, and paste it."
+            : "Select the message manually, copy it, and paste it into Messenger.";
+      });
+
+    document.getElementById("memoryPhoto")
+      .addEventListener("change", event => {
+        const file = event.target.files[0];
+        const preview =
+          document.getElementById("memoryPreview");
+
+        if (!file) {
+          selectedMemoryDataUrl = "";
+          preview.hidden = true;
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          selectedMemoryDataUrl = reader.result;
+          preview.src = selectedMemoryDataUrl;
+          preview.hidden = false;
+        };
+        reader.readAsDataURL(file);
+      });
+
+    document.getElementById("postMemory")
+      .addEventListener("click", () => {
+        const player = getCurrentPlayer();
+        const commentText =
+          document.getElementById("memoryComment")
+            .value.trim();
+        const memoryDateValue =
+          document.getElementById("memoryDate").value;
+        const feedback =
+          document.getElementById("memoryFeedback");
+
+        if (!player) {
+          feedback.textContent =
+            "Register your player profile first.";
+          return;
+        }
+
+        if (!selectedMemoryDataUrl && !commentText) {
+          feedback.textContent =
+            "Add a photo or write a comment.";
+          return;
+        }
+
+        const memoryDate = memoryDateValue
+          ? formatMatchDate(memoryDateValue)
+          : "Match day not selected";
+
+        const card = document.createElement("article");
+        card.className = "memory-card";
+
+        const photoStyle = selectedMemoryDataUrl
+          ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${selectedMemoryDataUrl}') center/cover;`
+          : "background:linear-gradient(135deg, #123e2c, #07130f);";
+
+        card.innerHTML = `
+          <div class="memory-photo" style="${photoStyle}">
+            <div>
+              <div class="memory-meta" style="color:rgba(255,255,255,.65)">
+                ${escapeHtml(memoryDate)}
+              </div>
+              <div class="scoreline">Match memory</div>
+            </div>
+          </div>
+          <div class="memory-content">
+            <div class="memory-meta">AIT Football Field</div>
+            <h3>Posted by ${escapeHtml(player.name)}</h3>
+            <p>${escapeHtml(commentText || "Shared a new match photo.")}</p>
+            <div class="memory-comments">
+              <div class="memory-comment">
+                <strong>${escapeHtml(player.name)}:</strong>
+                ${escapeHtml(commentText || "Great Sunday with the group.")}
+              </div>
+            </div>
+            <div class="comment-form">
+              <div class="comment-as">
+                Commenting as
+                <strong class="commentIdentityName">${escapeHtml(player.name)}</strong>
+              </div>
+              <div class="comment-row">
+                <input class="comment-input" placeholder="Write a comment...">
+                <button class="comment-button" type="button">Post</button>
+              </div>
+            </div>
+          </div>`;
+
+        document.getElementById("memoryList")
+          .prepend(card);
+        document.getElementById("memoryComment").value =
+          "";
+        document.getElementById("memoryPhoto").value =
+          "";
+        document.getElementById("memoryPreview").hidden =
+          true;
+        selectedMemoryDataUrl = "";
+        feedback.textContent =
+          "Memory added on this device. Shared memory storage is the next feature.";
+        updateAutomaticIdentityUI();
+      });
+
+    document.getElementById("memoryList")
+      .addEventListener("click", event => {
+        const button =
+          event.target.closest(".comment-button");
+        if (!button) return;
+
+        const player = getCurrentPlayer();
+        const form =
+          button.closest(".comment-form");
+        const input =
+          form.querySelector(".comment-input");
+        const value = input.value.trim();
+
+        if (!player) {
+          input.placeholder =
+            "Register your profile first";
+          return;
+        }
+
+        if (!value) {
+          input.placeholder =
+            "Write a comment first";
+          return;
+        }
+
+        const comment =
+          document.createElement("div");
+        comment.className = "memory-comment";
+        comment.innerHTML =
+          `<strong>${escapeHtml(player.name)}:</strong> ${escapeHtml(value)}`;
+
+        form.previousElementSibling.appendChild(comment);
+        input.value = "";
+        input.placeholder =
+          "Comment posted on this device";
+      });
+
+    document.getElementById("closeShareModal")
+      .addEventListener("click", () =>
+        document.getElementById("shareModal")
+          .classList.remove("open")
+      );
+
+    document.getElementById("shareModal")
+      .addEventListener("click", event => {
+        if (event.target.id === "shareModal") {
+          event.currentTarget.classList.remove("open");
+        }
+      });
+
+    document.querySelectorAll(".nav-item")
+      .forEach(item => {
+        item.addEventListener("click", () => {
+          document.querySelectorAll(".nav-item")
+            .forEach(navItem =>
+              navItem.classList.toggle(
+                "active",
+                navItem === item
+              )
+            );
+          document.querySelectorAll(".screen")
+            .forEach(screen =>
+              screen.classList.toggle(
+                "active",
+                screen.id === item.dataset.screen
+              )
+            );
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+          });
+        });
+      });
+
+    const settingsModal =
+      document.getElementById("settingsModal");
+
+    document.getElementById("settingsButton")
+      .addEventListener("click", () =>
+        settingsModal.classList.add("open")
+      );
+
+    document.getElementById("closeModal")
+      .addEventListener("click", () =>
+        settingsModal.classList.remove("open")
+      );
+
+    settingsModal.addEventListener("click", event => {
+      if (event.target === settingsModal) {
+        settingsModal.classList.remove("open");
       }
     });
 
-    renderTeams();
-    renderProfiles();
-    updateCountdown();
-    document.getElementById("joinConfirmedCard").style.display = confirmedTime ? "block" : "none";
-    document.getElementById("teamsCard").style.display = confirmedTime ? "block" : "none";
-    setInterval(updateCountdown, 1000);
+    function setCreateFormDefaults() {
+      const dateInput =
+        document.getElementById("newDate");
+      const memoryDate =
+        document.getElementById("memoryDate");
 
-    loadRegisteredPlayersFromSupabase().catch(error => {
-      console.error("Could not load registered players:", error);
-      document.getElementById("profileConnectionStatus").textContent =
-        "Connection failed";
-      document.getElementById("profileState").textContent =
-        error.message || "Could not connect to Supabase.";
-    });
+      dateInput.value = getNextSundayBangkok();
+      memoryDate.value = getTodayBangkok();
+    }
+
+    async function bootstrapApplication() {
+      setCreateFormDefaults();
+      setNoActiveMatch();
+      renderProfiles();
+      updateProfileForm();
+      updateAutomaticIdentityUI();
+      setInterval(updateCountdown, 1000);
+
+      try {
+        await loadRegisteredPlayersFromSupabase();
+        await loadActiveMatchFromSupabase();
+        setupRealtimeSubscriptions();
+      } catch (error) {
+        console.error("Application startup failed:", error);
+        document.getElementById("profileConnectionStatus")
+          .textContent = "Connection failed";
+        document.getElementById("profileState")
+          .textContent =
+            error.message || "Could not connect to Supabase.";
+        document.getElementById("timeNotice")
+          .textContent =
+            "Could not load the shared match. Check the browser console.";
+      }
+    }
+
+    bootstrapApplication();
   </script>
 </body>
 </html>
