@@ -791,7 +791,56 @@
     .upload-box strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: .8rem; }
     .memory-preview { width: 100%; max-height: 180px; margin-top: 10px; object-fit: cover; border-radius: 14px; }
     .memory-comments { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-    .memory-comment { margin-top: 7px; padding: 9px 10px; border-radius: 12px; color: var(--muted); background: #f2f4ee; font-size: .68rem; line-height: 1.45; }
+    .memory-comment {
+      margin-top: 7px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: start;
+      gap: 8px;
+      border-radius: 12px;
+      color: var(--muted);
+      background: #f2f4ee;
+      font-size: .68rem;
+      line-height: 1.45;
+    }
+
+    .memory-comment-text {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .memory-owner-actions {
+      margin-top: 10px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .memory-delete,
+    .comment-delete {
+      border: 0;
+      border-radius: 10px;
+      color: #8c342d;
+      background: #ffe3e0;
+      font-size: .61rem;
+      font-weight: 900;
+    }
+
+    .memory-delete {
+      min-height: 35px;
+      padding: 0 10px;
+    }
+
+    .comment-delete {
+      flex: 0 0 auto;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0 7px;
+    }
+
+    .memory-uploading {
+      color: var(--blue);
+    }
+
     .comment-form { margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 7px; }
     .comment-as {
       color: var(--muted);
@@ -1180,43 +1229,29 @@
             <span>Your name will be added automatically to this post.</span>
           </div>
           <div class="field">
-            <label for="memoryDate">Match day</label>
-            <input id="memoryDate" type="date" value="2026-07-26">
+            <label for="memoryMatchSelect">Match</label>
+            <select id="memoryMatchSelect">
+              <option value="">Loading matches…</option>
+            </select>
           </div>
           <div class="field">
             <label for="memoryPhoto">Match photo</label>
             <label class="upload-box" for="memoryPhoto">
               <span><strong>📷 Choose a photo</strong>Tap to upload from your phone</span>
-              <input id="memoryPhoto" type="file" accept="image/*">
+              <input id="memoryPhoto" type="file" accept="image/jpeg,image/png,image/webp">
             </label>
             <img class="memory-preview" id="memoryPreview" alt="Selected memory preview" hidden>
           </div>
           <div class="field">
-            <label for="memoryComment">Comment</label>
-            <textarea id="memoryComment" placeholder="Write something about the match..."></textarea>
+            <label for="memoryComment">Caption</label>
+            <textarea id="memoryComment" placeholder="Write something about this match memory..."></textarea>
           </div>
           <button class="primary" id="postMemory">Post memory</button>
           <div class="feedback" id="memoryFeedback" aria-live="polite"></div>
         </article>
 
         <div class="memory-list" id="memoryList">
-          <article class="memory-card">
-            <div class="memory-photo"><div><div class="memory-meta" style="color:rgba(255,255,255,.65)">12 July 2026</div><div class="scoreline">Team A 5 — 4 Team B</div></div></div>
-            <div class="memory-content">
-              <div class="memory-meta">AIT Football Field</div>
-              <h3>The comeback match</h3>
-              <p>Team A came back from two goals down. Min scored the winner and nobody remembered to take a proper team photo.</p><div class="memory-comments"><div class="memory-comment"><strong>Alex:</strong> Best comeback so far.</div></div><div class="comment-form"><div class="comment-as">Commenting as <strong class="commentIdentityName">register first</strong></div><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
-            </div>
-          </article>
-
-          <article class="memory-card">
-            <div class="memory-photo"><div><div class="memory-meta" style="color:rgba(255,255,255,.65)">5 July 2026</div><div class="scoreline">Team A 3 — 3 Team B</div></div></div>
-            <div class="memory-content">
-              <div class="memory-meta">AIT Football Field</div>
-              <h3>The goalkeeper problem</h3>
-              <p>Six goals, three penalties, and twelve players avoiding goalkeeper duty. A classic Sunday.</p><div class="memory-comments"><div class="memory-comment"><strong>Kaung:</strong> Next time we choose the goalkeeper before kickoff.</div></div><div class="comment-form"><div class="comment-as">Commenting as <strong class="commentIdentityName">register first</strong></div><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
-            </div>
-          </article>
+          <div class="notice">Loading shared memories…</div>
         </div>
       </section>
 
@@ -1318,6 +1353,11 @@
     let pendingProfileFile = null;
     let pendingProfileImage = null;
     let selectedMemoryDataUrl = "";
+    let selectedMemoryFile = null;
+    let memoryMatches = [];
+    let memoryPosts = [];
+    let memoryComments = [];
+    let memoryRefreshTimer = null;
 
     let activeMatch = null;
     let activeTimeOptions = [];
@@ -1532,6 +1572,12 @@
 
       renderProfiles();
       updateProfileForm();
+      updateAutomaticIdentityUI();
+
+      if (memoryPosts.length) {
+        renderMemories();
+      }
+
       document.getElementById("profileConnectionStatus").textContent =
         "Supabase connected";
     }
@@ -1618,7 +1664,7 @@
       document.getElementById("saveVote").disabled =
         !canChooseTeam;
       document.getElementById("postMemory").disabled =
-        !hasProfile;
+        !hasProfile || !memoryMatches.length;
 
       document.querySelectorAll(".comment-button").forEach(button => {
         button.disabled = !hasProfile;
@@ -1658,6 +1704,433 @@
       }
 
       renderAvailabilityOptions();
+    }
+
+    async function createMemorySignedUrl(imagePath) {
+      if (!imagePath) return null;
+
+      const { data, error } = await window.db.storage
+        .from("memories")
+        .createSignedUrl(imagePath, 60 * 60);
+
+      if (error) {
+        console.warn("Could not create memory image URL:", error);
+        return null;
+      }
+
+      return data.signedUrl;
+    }
+
+    function formatMemoryTimestamp(timestamp) {
+      if (!timestamp) return "";
+
+      return new Date(timestamp).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Bangkok"
+      });
+    }
+
+    async function loadMemoryMatchesFromSupabase() {
+      const select = document.getElementById("memoryMatchSelect");
+      const previousValue = select.value;
+
+      const { data, error } = await window.db
+        .from("matches")
+        .select(
+          "id, title, match_date, location, team_a_name, team_b_name, status"
+        )
+        .order("match_date", { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      memoryMatches = data || [];
+      select.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = memoryMatches.length
+        ? "Choose a match"
+        : "Create a match first";
+      select.appendChild(placeholder);
+
+      memoryMatches.forEach(match => {
+        const option = document.createElement("option");
+        option.value = match.id;
+        option.textContent =
+          `${formatMatchDate(match.match_date)} · ${match.title}`;
+        select.appendChild(option);
+      });
+
+      const preferredValue =
+        memoryMatches.some(match => match.id === previousValue)
+          ? previousValue
+          : memoryMatches.some(match => match.id === activeMatch?.id)
+            ? activeMatch.id
+            : memoryMatches[0]?.id || "";
+
+      select.value = preferredValue;
+      updateAutomaticIdentityUI();
+    }
+
+    async function loadMemoriesFromSupabase() {
+      const { data: postRows, error: postError } = await window.db
+        .from("memory_posts")
+        .select(
+          "id, match_id, player_id, created_by, image_path, caption, created_at"
+        )
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (postError) throw postError;
+
+      const posts = postRows || [];
+      const postIds = posts.map(post => post.id);
+
+      const commentsRequest = postIds.length
+        ? window.db
+            .from("memory_comments")
+            .select(
+              "id, memory_post_id, player_id, created_by, comment, created_at"
+            )
+            .in("memory_post_id", postIds)
+            .order("created_at", { ascending: true })
+        : Promise.resolve({ data: [], error: null });
+
+      const { data: commentRows, error: commentError } =
+        await commentsRequest;
+
+      if (commentError) throw commentError;
+
+      memoryPosts = await Promise.all(
+        posts.map(async post => ({
+          ...post,
+          imageUrl: await createMemorySignedUrl(post.image_path)
+        }))
+      );
+      memoryComments = commentRows || [];
+
+      renderMemories();
+      updateAutomaticIdentityUI();
+    }
+
+    function renderMemories() {
+      const list = document.getElementById("memoryList");
+      const currentPlayer = getCurrentPlayer();
+      const currentUserId = currentSupabaseUser?.id;
+
+      if (!memoryPosts.length) {
+        list.innerHTML =
+          `<div class="notice">No shared memories yet. Add the first photo or caption above.</div>`;
+        return;
+      }
+
+      list.innerHTML = memoryPosts.map(post => {
+        const author = players.find(
+          player => player.id === post.player_id
+        );
+        const match = memoryMatches.find(
+          item => item.id === post.match_id
+        );
+        const comments = memoryComments.filter(
+          comment => comment.memory_post_id === post.id
+        );
+        const canDeletePost =
+          post.created_by === currentUserId;
+        const matchTitle = match?.title || "Sunday match";
+        const matchup = match
+          ? `${match.team_a_name || "Team A"} vs ${match.team_b_name || "Team B"}`
+          : "Match memory";
+        const photoStyle = post.imageUrl
+          ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${post.imageUrl}') center/cover;`
+          : "background:linear-gradient(135deg, #123e2c, #07130f);";
+
+        const commentsMarkup = comments.length
+          ? comments.map(comment => {
+              const commenter = players.find(
+                player => player.id === comment.player_id
+              );
+              const canDeleteComment =
+                comment.created_by === currentUserId;
+
+              return `
+                <div class="memory-comment">
+                  <div class="memory-comment-text">
+                    <strong>${escapeHtml(commenter?.name || "Player")}:</strong>
+                    ${escapeHtml(comment.comment)}
+                  </div>
+                  ${canDeleteComment
+                    ? `<button class="comment-delete" type="button" data-delete-comment-id="${comment.id}" aria-label="Delete comment">×</button>`
+                    : ""}
+                </div>
+              `;
+            }).join("")
+          : `<div class="empty">No comments yet</div>`;
+
+        return `
+          <article class="memory-card" data-memory-card-id="${post.id}">
+            <div class="memory-photo" style="${photoStyle}">
+              <div>
+                <div class="memory-meta" style="color:rgba(255,255,255,.65)">
+                  ${escapeHtml(formatMatchDate(match?.match_date))}
+                </div>
+                <div class="scoreline">${escapeHtml(matchup)}</div>
+              </div>
+            </div>
+            <div class="memory-content">
+              <div class="memory-meta">
+                ${escapeHtml(match?.location || "AIT Football Field")}
+                · ${escapeHtml(formatMemoryTimestamp(post.created_at))}
+              </div>
+              <h3>${escapeHtml(matchTitle)} · Posted by ${escapeHtml(author?.name || "Player")}</h3>
+              <p>${escapeHtml(post.caption || "Shared a match photo.")}</p>
+
+              ${canDeletePost
+                ? `<div class="memory-owner-actions">
+                    <button class="memory-delete" type="button" data-delete-memory-id="${post.id}">
+                      Delete my post
+                    </button>
+                  </div>`
+                : ""}
+
+              <div class="memory-comments">
+                ${commentsMarkup}
+              </div>
+
+              <div class="comment-form">
+                <div class="comment-as">
+                  Commenting as
+                  <strong class="commentIdentityName">${escapeHtml(currentPlayer?.name || "register first")}</strong>
+                </div>
+                <div class="comment-row">
+                  <input
+                    class="comment-input"
+                    maxlength="500"
+                    placeholder="${currentPlayer ? "Write a comment..." : "Register your profile first"}"
+                    ${currentPlayer ? "" : "disabled"}
+                  >
+                  <button
+                    class="comment-button"
+                    type="button"
+                    data-post-comment-id="${post.id}"
+                    ${currentPlayer ? "" : "disabled"}
+                  >
+                    Post
+                  </button>
+                </div>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function postMemoryToSupabase() {
+      const player = getCurrentPlayer();
+      const matchId =
+        document.getElementById("memoryMatchSelect").value;
+      const caption =
+        document.getElementById("memoryComment").value.trim();
+      const feedback =
+        document.getElementById("memoryFeedback");
+      const postButton =
+        document.getElementById("postMemory");
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile first.";
+        return;
+      }
+
+      if (!matchId) {
+        feedback.textContent =
+          "Choose the match for this memory.";
+        return;
+      }
+
+      if (!selectedMemoryFile && !caption) {
+        feedback.textContent =
+          "Choose a photo or write a caption.";
+        return;
+      }
+
+      postButton.disabled = true;
+      postButton.textContent = "Uploading…";
+      feedback.classList.add("memory-uploading");
+      feedback.textContent =
+        selectedMemoryFile
+          ? "Uploading the photo securely…"
+          : "Saving the memory…";
+
+      let uploadedPath = null;
+
+      try {
+        if (selectedMemoryFile) {
+          const extension =
+            selectedMemoryFile.name
+              .split(".")
+              .pop()
+              ?.toLowerCase() || "jpg";
+          const randomId =
+            typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+          uploadedPath =
+            `${currentSupabaseUser.id}/${randomId}.${extension}`;
+
+          const { error: uploadError } = await window.db.storage
+            .from("memories")
+            .upload(uploadedPath, selectedMemoryFile, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: selectedMemoryFile.type
+            });
+
+          if (uploadError) throw uploadError;
+        }
+
+        const { error: insertError } = await window.db
+          .from("memory_posts")
+          .insert({
+            match_id: matchId,
+            player_id: player.id,
+            created_by: currentSupabaseUser.id,
+            image_path: uploadedPath,
+            caption
+          });
+
+        if (insertError) throw insertError;
+
+        document.getElementById("memoryComment").value = "";
+        document.getElementById("memoryPhoto").value = "";
+        document.getElementById("memoryPreview").hidden = true;
+        selectedMemoryFile = null;
+        selectedMemoryDataUrl = "";
+
+        await loadMemoriesFromSupabase();
+
+        feedback.textContent =
+          "Memory posted permanently for the whole group.";
+      } catch (error) {
+        console.error("Could not post memory:", error);
+
+        if (uploadedPath) {
+          await window.db.storage
+            .from("memories")
+            .remove([uploadedPath]);
+        }
+
+        feedback.textContent =
+          error.message || "Could not post this memory.";
+      } finally {
+        feedback.classList.remove("memory-uploading");
+        postButton.textContent = "Post memory";
+        updateAutomaticIdentityUI();
+      }
+    }
+
+    async function postMemoryComment(postId, input, button) {
+      const player = getCurrentPlayer();
+      const value = input.value.trim();
+
+      if (!player) {
+        input.placeholder = "Register your profile first";
+        return;
+      }
+
+      if (!value) {
+        input.placeholder = "Write a comment first";
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "…";
+
+      try {
+        const { error } = await window.db
+          .from("memory_comments")
+          .insert({
+            memory_post_id: postId,
+            player_id: player.id,
+            created_by: currentSupabaseUser.id,
+            comment: value
+          });
+
+        if (error) throw error;
+
+        input.value = "";
+        await loadMemoriesFromSupabase();
+      } catch (error) {
+        console.error("Could not post comment:", error);
+        input.placeholder =
+          error.message || "Could not post comment";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Post";
+      }
+    }
+
+    async function deleteMemoryPost(postId) {
+      const post = memoryPosts.find(item => item.id === postId);
+      if (!post) return;
+
+      const confirmed = window.confirm(
+        "Delete this memory and all of its comments?"
+      );
+      if (!confirmed) return;
+
+      const { error } = await window.db
+        .from("memory_posts")
+        .delete()
+        .eq("id", postId)
+        .eq("created_by", currentSupabaseUser.id);
+
+      if (error) {
+        console.error("Could not delete memory:", error);
+        document.getElementById("memoryFeedback").textContent =
+          error.message || "Could not delete this memory.";
+        return;
+      }
+
+      if (post.image_path) {
+        const { error: storageError } = await window.db.storage
+          .from("memories")
+          .remove([post.image_path]);
+
+        if (storageError) {
+          console.warn(
+            "The database post was deleted, but its image cleanup failed:",
+            storageError
+          );
+        }
+      }
+
+      await loadMemoriesFromSupabase();
+      document.getElementById("memoryFeedback").textContent =
+        "Memory deleted.";
+    }
+
+    async function deleteMemoryComment(commentId) {
+      const { error } = await window.db
+        .from("memory_comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("created_by", currentSupabaseUser.id);
+
+      if (error) {
+        console.error("Could not delete comment:", error);
+        document.getElementById("memoryFeedback").textContent =
+          error.message || "Could not delete this comment.";
+        return;
+      }
+
+      await loadMemoriesFromSupabase();
     }
 
     function resetPlayerMatchState() {
@@ -2613,12 +3086,26 @@ ${pageUrl}`;
       }, 250);
     }
 
+    function scheduleMemoryRefresh() {
+      clearTimeout(memoryRefreshTimer);
+      memoryRefreshTimer = setTimeout(async () => {
+        try {
+          await loadMemoryMatchesFromSupabase();
+          await loadMemoriesFromSupabase();
+        } catch (error) {
+          console.error("Realtime memory refresh failed:", error);
+        }
+      }, 250);
+    }
+
     function scheduleFullRefresh() {
       clearTimeout(fullRefreshTimer);
       fullRefreshTimer = setTimeout(async () => {
         try {
           await loadRegisteredPlayersFromSupabase();
           await loadActiveMatchFromSupabase();
+          await loadMemoryMatchesFromSupabase();
+          await loadMemoriesFromSupabase();
         } catch (error) {
           console.error("Realtime full refresh failed:", error);
         }
@@ -2639,7 +3126,10 @@ ${pageUrl}`;
             schema: "public",
             table: "matches"
           },
-          scheduleMatchRefresh
+          () => {
+            scheduleMatchRefresh();
+            scheduleMemoryRefresh();
+          }
         )
         .on(
           "postgres_changes",
@@ -2705,6 +3195,24 @@ ${pageUrl}`;
             table: "players"
           },
           scheduleFullRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "memory_posts"
+          },
+          scheduleMemoryRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "memory_comments"
+          },
+          scheduleMemoryRefresh
         )
         .subscribe(status => {
           console.log("Sunday League realtime:", status);
@@ -2866,6 +3374,8 @@ ${pageUrl}`;
 
           await loadRegisteredPlayersFromSupabase();
           await loadActiveMatchFromSupabase();
+          await loadMemoryMatchesFromSupabase();
+          await loadMemoriesFromSupabase();
 
           feedback.textContent = existingPlayer
             ? "Your profile was updated permanently."
@@ -2987,136 +3497,91 @@ ${pageUrl}`;
         const file = event.target.files[0];
         const preview =
           document.getElementById("memoryPreview");
+        const feedback =
+          document.getElementById("memoryFeedback");
 
         if (!file) {
+          selectedMemoryFile = null;
           selectedMemoryDataUrl = "";
+          preview.hidden = true;
+          preview.removeAttribute("src");
+          return;
+        }
+
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+          feedback.textContent =
+            "Choose a JPEG, PNG, or WebP image.";
+          event.target.value = "";
+          selectedMemoryFile = null;
           preview.hidden = true;
           return;
         }
+
+        if (file.size > 6 * 1024 * 1024) {
+          feedback.textContent =
+            "The memory photo must be smaller than 6 MB.";
+          event.target.value = "";
+          selectedMemoryFile = null;
+          preview.hidden = true;
+          return;
+        }
+
+        selectedMemoryFile = file;
 
         const reader = new FileReader();
         reader.onload = () => {
           selectedMemoryDataUrl = reader.result;
           preview.src = selectedMemoryDataUrl;
           preview.hidden = false;
+          feedback.textContent =
+            "Photo selected. Tap Post memory to upload it permanently.";
         };
         reader.readAsDataURL(file);
       });
 
     document.getElementById("postMemory")
-      .addEventListener("click", () => {
-        const player = getCurrentPlayer();
-        const commentText =
-          document.getElementById("memoryComment")
-            .value.trim();
-        const memoryDateValue =
-          document.getElementById("memoryDate").value;
-        const feedback =
-          document.getElementById("memoryFeedback");
-
-        if (!player) {
-          feedback.textContent =
-            "Register your player profile first.";
-          return;
-        }
-
-        if (!selectedMemoryDataUrl && !commentText) {
-          feedback.textContent =
-            "Add a photo or write a comment.";
-          return;
-        }
-
-        const memoryDate = memoryDateValue
-          ? formatMatchDate(memoryDateValue)
-          : "Match day not selected";
-
-        const card = document.createElement("article");
-        card.className = "memory-card";
-
-        const photoStyle = selectedMemoryDataUrl
-          ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${selectedMemoryDataUrl}') center/cover;`
-          : "background:linear-gradient(135deg, #123e2c, #07130f);";
-
-        card.innerHTML = `
-          <div class="memory-photo" style="${photoStyle}">
-            <div>
-              <div class="memory-meta" style="color:rgba(255,255,255,.65)">
-                ${escapeHtml(memoryDate)}
-              </div>
-              <div class="scoreline">Match memory</div>
-            </div>
-          </div>
-          <div class="memory-content">
-            <div class="memory-meta">AIT Football Field</div>
-            <h3>Posted by ${escapeHtml(player.name)}</h3>
-            <p>${escapeHtml(commentText || "Shared a new match photo.")}</p>
-            <div class="memory-comments">
-              <div class="memory-comment">
-                <strong>${escapeHtml(player.name)}:</strong>
-                ${escapeHtml(commentText || "Great Sunday with the group.")}
-              </div>
-            </div>
-            <div class="comment-form">
-              <div class="comment-as">
-                Commenting as
-                <strong class="commentIdentityName">${escapeHtml(player.name)}</strong>
-              </div>
-              <div class="comment-row">
-                <input class="comment-input" placeholder="Write a comment...">
-                <button class="comment-button" type="button">Post</button>
-              </div>
-            </div>
-          </div>`;
-
-        document.getElementById("memoryList")
-          .prepend(card);
-        document.getElementById("memoryComment").value =
-          "";
-        document.getElementById("memoryPhoto").value =
-          "";
-        document.getElementById("memoryPreview").hidden =
-          true;
-        selectedMemoryDataUrl = "";
-        feedback.textContent =
-          "Memory added on this device. Shared memory storage is the next feature.";
-        updateAutomaticIdentityUI();
-      });
+      .addEventListener(
+        "click",
+        postMemoryToSupabase
+      );
 
     document.getElementById("memoryList")
       .addEventListener("click", event => {
-        const button =
-          event.target.closest(".comment-button");
-        if (!button) return;
+        const commentButton =
+          event.target.closest("[data-post-comment-id]");
 
-        const player = getCurrentPlayer();
-        const form =
-          button.closest(".comment-form");
-        const input =
-          form.querySelector(".comment-input");
-        const value = input.value.trim();
+        if (commentButton) {
+          const form =
+            commentButton.closest(".comment-form");
+          const input =
+            form.querySelector(".comment-input");
 
-        if (!player) {
-          input.placeholder =
-            "Register your profile first";
+          postMemoryComment(
+            commentButton.dataset.postCommentId,
+            input,
+            commentButton
+          );
           return;
         }
 
-        if (!value) {
-          input.placeholder =
-            "Write a comment first";
+        const deletePostButton =
+          event.target.closest("[data-delete-memory-id]");
+
+        if (deletePostButton) {
+          deleteMemoryPost(
+            deletePostButton.dataset.deleteMemoryId
+          );
           return;
         }
 
-        const comment =
-          document.createElement("div");
-        comment.className = "memory-comment";
-        comment.innerHTML =
-          `<strong>${escapeHtml(player.name)}:</strong> ${escapeHtml(value)}`;
+        const deleteCommentButton =
+          event.target.closest("[data-delete-comment-id]");
 
-        form.previousElementSibling.appendChild(comment);
-        input.value = "";
-        input.placeholder =
-          "Comment posted on this device";
+        if (deleteCommentButton) {
+          deleteMemoryComment(
+            deleteCommentButton.dataset.deleteCommentId
+          );
+        }
       });
 
     document.getElementById("closeShareModal")
@@ -3178,11 +3643,8 @@ ${pageUrl}`;
     function setCreateFormDefaults() {
       const dateInput =
         document.getElementById("newDate");
-      const memoryDate =
-        document.getElementById("memoryDate");
 
       dateInput.value = getNextSundayBangkok();
-      memoryDate.value = getTodayBangkok();
     }
 
     async function bootstrapApplication() {
@@ -3196,6 +3658,8 @@ ${pageUrl}`;
       try {
         await loadRegisteredPlayersFromSupabase();
         await loadActiveMatchFromSupabase();
+        await loadMemoryMatchesFromSupabase();
+        await loadMemoriesFromSupabase();
         setupRealtimeSubscriptions();
       } catch (error) {
         console.error("Application startup failed:", error);
