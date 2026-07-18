@@ -737,6 +737,28 @@
     .memory-comments { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
     .memory-comment { margin-top: 7px; padding: 9px 10px; border-radius: 12px; color: var(--muted); background: #f2f4ee; font-size: .68rem; line-height: 1.45; }
     .comment-form { margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 7px; }
+    .comment-as {
+      color: var(--muted);
+      font-size: .65rem;
+      font-weight: 700;
+    }
+    .identity-notice {
+      display: grid;
+      gap: 2px;
+    }
+    .identity-notice strong {
+      color: var(--ink);
+      font-size: .78rem;
+    }
+    .identity-notice span {
+      color: var(--muted);
+      font-size: .65rem;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .48;
+      box-shadow: none;
+    }
     .comment-form select, .comment-form input { min-height: 42px; font-size: .72rem; }
     .comment-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
     .comment-button { min-width: 70px; border: 0; border-radius: 12px; color: var(--ink); background: var(--lime); font-size: .68rem; font-weight: 900; }
@@ -932,11 +954,9 @@
             <span>Select multiple times</span>
           </div>
 
-          <div class="field">
-            <label for="availabilityPlayerSelect">Choose your name</label>
-            <select id="availabilityPlayerSelect">
-              <option value="">Select player</option>
-            </select>
+          <div class="notice identity-notice" id="availabilityIdentity">
+            <strong id="availabilityIdentityName">Register a player profile first</strong>
+            <span>Your availability will automatically use your profile.</span>
           </div>
 
           <div class="field">
@@ -963,11 +983,9 @@
             <span id="confirmedTimeLabel">Time confirmed</span>
           </div>
 
-          <div class="field">
-            <label for="playerSelect">Choose your name</label>
-            <select id="playerSelect">
-              <option value="">Select player</option>
-            </select>
+          <div class="notice identity-notice" id="teamIdentity">
+            <strong id="teamIdentityName">Register a player profile first</strong>
+            <span>Your team choice will automatically use your profile.</span>
           </div>
 
           <div class="field">
@@ -1006,29 +1024,18 @@
       <section class="screen" id="playersScreen">
         <div class="page-heading">
           <h2>Our players</h2>
-          <p>Claim your registered profile once, then update your name, photo, shirt number, position, and description.</p>
+          <p>Create your own player profile once. The app will then automatically use your identity for matches, memories, and comments.</p>
         </div>
 
         <article class="section-card">
           <div class="section-title">
-            <h2>Your player profile</h2>
+            <h2 id="profileFormTitle">Create your profile</h2>
             <span id="profileConnectionStatus">Connecting…</span>
           </div>
 
-          <div class="field">
-            <label for="profilePlayerSelect">Choose your registered profile</label>
-            <select id="profilePlayerSelect">
-              <option value="">Select player</option>
-            </select>
-          </div>
-
-          <div class="notice" id="profileClaimState">
+          <div class="notice" id="profileState">
             Connecting to Supabase…
           </div>
-
-          <button class="primary" id="claimProfile" type="button" style="display:none">
-            Claim My Profile
-          </button>
 
           <div id="profileEditor" style="display:none">
             <div class="field">
@@ -1061,7 +1068,7 @@
                 <option>Defender</option>
                 <option>Midfielder</option>
                 <option>Forward</option>
-                <option>Anywhere</option>
+                <option selected>Anywhere</option>
               </select>
             </div>
 
@@ -1074,7 +1081,9 @@
               ></textarea>
             </div>
 
-            <button class="primary" id="saveProfile" type="button">Save My Profile</button>
+            <button class="primary" id="saveProfile" type="button">
+              Register My Profile
+            </button>
             <div class="feedback" id="profileFeedback" aria-live="polite"></div>
           </div>
         </article>
@@ -1092,9 +1101,9 @@
             <h2>Add a memory</h2>
             <span>Everyone can post</span>
           </div>
-          <div class="field">
-            <label for="memoryName">Your name</label>
-            <select id="memoryName"><option value="">Select player</option></select>
+          <div class="notice identity-notice" id="memoryIdentity">
+            <strong id="memoryIdentityName">Register a player profile first</strong>
+            <span>Your name will be added automatically to this post.</span>
           </div>
           <div class="field">
             <label for="memoryDate">Match day</label>
@@ -1122,7 +1131,7 @@
             <div class="memory-content">
               <div class="memory-meta">AIT Football Field</div>
               <h3>The comeback match</h3>
-              <p>Team A came back from two goals down. Min scored the winner and nobody remembered to take a proper team photo.</p><div class="memory-comments"><div class="memory-comment"><strong>Alex:</strong> Best comeback so far.</div></div><div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+              <p>Team A came back from two goals down. Min scored the winner and nobody remembered to take a proper team photo.</p><div class="memory-comments"><div class="memory-comment"><strong>Alex:</strong> Best comeback so far.</div></div><div class="comment-form"><div class="comment-as">Commenting as <strong class="commentIdentityName">register first</strong></div><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
             </div>
           </article>
 
@@ -1131,7 +1140,7 @@
             <div class="memory-content">
               <div class="memory-meta">AIT Football Field</div>
               <h3>The goalkeeper problem</h3>
-              <p>Six goals, three penalties, and twelve players avoiding goalkeeper duty. A classic Sunday.</p><div class="memory-comments"><div class="memory-comment"><strong>Kaung:</strong> Next time we choose the goalkeeper before kickoff.</div></div><div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+              <p>Six goals, three penalties, and twelve players avoiding goalkeeper duty. A classic Sunday.</p><div class="memory-comments"><div class="memory-comment"><strong>Kaung:</strong> Next time we choose the goalkeeper before kickoff.</div></div><div class="comment-form"><div class="comment-as">Commenting as <strong class="commentIdentityName">register first</strong></div><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
             </div>
           </article>
         </div>
@@ -1216,7 +1225,7 @@
         <button class="close" id="closeModal" aria-label="Close">×</button>
       </div>
       <div class="privacy-note">
-        This interface is designed only for your friends. There is no public recruitment, contact form, or public player registration.
+        This interface is designed only for your friends. Friends register their own player profile through the private group link. There is no public recruitment or contact form.
         The final version can use one private link and an organizer edit PIN.
       </div>
     </div>
@@ -1225,16 +1234,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabase-client.js"></script>
   <script>
-    const players = [
-      { id: "kaung", name: "Kaung", role: "Midfielder", number: 10, note: "Creates chances and debates formations.", photo: null, team: "A", status: "playing" },
-      { id: "min", name: "Min", role: "Forward", number: 9, note: "Shoots whenever the goal is visible.", photo: null, team: "A", status: "playing" },
-      { id: "aung", name: "Aung", role: "Defender", number: 5, note: "Simple passes and serious tackles.", photo: null, team: "A", status: "playing" },
-      { id: "alex", name: "Alex", role: "Midfielder", number: 8, note: "Keeps the ball and the group chat moving.", photo: null, team: "B", status: "playing" },
-      { id: "ben", name: "Ben", role: "Forward", number: 11, note: "Fast feet, unpredictable finishing.", photo: null, team: "B", status: "playing" },
-      { id: "daniel", name: "Daniel", role: "Goalkeeper", number: 1, note: "Goalkeeper only when absolutely necessary.", photo: null, team: "B", status: "playing" },
-      { id: "chris", name: "Chris", role: "Defender", number: 4, note: "Arrives late but always brings water.", photo: null, team: null, status: "maybe" },
-      { id: "john", name: "John", role: "Midfielder", number: 7, note: "Runs all game and asks for one more match.", photo: null, team: null, status: "out" }
-    ];
+    const players = [];
 
     const fixedMatchDate = "2026-07-26";
     const timeOptions = ["17:00", "18:00", "19:00", "20:00"];
@@ -1250,33 +1250,6 @@
     let pendingProfileFile = null;
 
 
-    const playerSelect = document.getElementById("playerSelect");
-    const memoryName = document.getElementById("memoryName");
-    players.forEach(player => {
-      const option = document.createElement("option");
-      option.value = player.id;
-      option.textContent = `${player.name} · ${player.role}`;
-      playerSelect.appendChild(option);
-      const memoryOption = option.cloneNode(true);
-      memoryName.appendChild(memoryOption);
-    });
-
-    function populateCommenterSelects(root = document) {
-      root.querySelectorAll(".commenter-select").forEach(select => {
-        if (select.options.length) return;
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "Comment as...";
-        select.appendChild(placeholder);
-        players.forEach(player => {
-          const option = document.createElement("option");
-          option.value = player.id;
-          option.textContent = player.name;
-          select.appendChild(option);
-        });
-      });
-    }
-
     function initials(name) {
       return name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
     }
@@ -1291,40 +1264,47 @@
       })[character]);
     }
 
-    function replaceSelectOptions(select, placeholder, detailed = false) {
-      if (!select) return;
-      select.innerHTML = "";
-
-      const firstOption = document.createElement("option");
-      firstOption.value = "";
-      firstOption.textContent = placeholder;
-      select.appendChild(firstOption);
-
-      players.forEach(player => {
-        const option = document.createElement("option");
-        option.value = player.id;
-        option.textContent = detailed
-          ? `${player.name} · ${player.role}`
-          : player.name;
-        select.appendChild(option);
-      });
+    function getCurrentPlayer() {
+      return players.find(player => player.id === currentOwnedPlayerId) || null;
     }
 
-    function repopulateAllPlayerSelects() {
-      replaceSelectOptions(playerSelect, "Select player", true);
-      replaceSelectOptions(memoryName, "Select player", true);
-      replaceSelectOptions(
-        document.getElementById("availabilityPlayerSelect"),
-        "Select player"
-      );
-      replaceSelectOptions(
-        document.getElementById("profilePlayerSelect"),
-        "Select player"
-      );
+    function updateAutomaticIdentityUI() {
+      const currentPlayer = getCurrentPlayer();
+      const displayName = currentPlayer
+        ? `${currentPlayer.name} · No. ${currentPlayer.number ?? "—"}`
+        : "Register a player profile first";
+      const commentName = currentPlayer
+        ? currentPlayer.name
+        : "register first";
 
-      document.querySelectorAll(".commenter-select").forEach(select => {
-        replaceSelectOptions(select, "Comment as...");
+      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName"].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = displayName;
       });
+
+      document.querySelectorAll(".commentIdentityName").forEach(element => {
+        element.textContent = commentName;
+      });
+
+      const hasProfile = Boolean(currentPlayer);
+      document.getElementById("saveAvailability").disabled = !hasProfile;
+      document.getElementById("saveVote").disabled = !hasProfile;
+      document.getElementById("postMemory").disabled = !hasProfile;
+      document.querySelectorAll(".comment-button").forEach(button => {
+        button.disabled = !hasProfile;
+      });
+      document.querySelectorAll(".team-pick").forEach(button => {
+        button.disabled = !hasProfile;
+      });
+
+      if (currentPlayer) {
+        selectedAvailability = new Set(
+          availabilityVotes[currentPlayer.id] || []
+        );
+        if (typeof renderAvailabilityOptions === "function") {
+          renderAvailabilityOptions();
+        }
+      }
     }
 
     async function createAvatarSignedUrl(imagePath) {
@@ -1370,22 +1350,30 @@
       );
 
       players.splice(0, players.length, ...mappedPlayers);
+
       currentOwnedPlayerId =
         players.find(player => player.ownerId === currentSupabaseUser.id)?.id ||
         null;
 
-      repopulateAllPlayerSelects();
       renderProfiles();
       renderTeams();
+      updateProfileForm();
+      updateAutomaticIdentityUI();
 
-      const profileSelect = document.getElementById("profilePlayerSelect");
-      if (currentOwnedPlayerId) {
-        profileSelect.value = currentOwnedPlayerId;
-      }
-
-      updateProfileClaimState();
       document.getElementById("profileConnectionStatus").textContent =
         "Supabase connected";
+    }
+
+    function clearProfileForm() {
+      profileName.value = "";
+      profileNumber.value = "";
+      profilePosition.value = "Anywhere";
+      profileDescription.value = "";
+      profileImage.value = "";
+      pendingProfileFile = null;
+      pendingProfileImage = null;
+      profilePreview.removeAttribute("src");
+      profilePreviewWrap.style.display = "none";
     }
 
     function fillProfileEditor(player) {
@@ -1394,6 +1382,7 @@
       profilePosition.value = player.role || "Anywhere";
       profileDescription.value = player.note || "";
       pendingProfileFile = null;
+      pendingProfileImage = null;
       profileImage.value = "";
 
       if (player.photo) {
@@ -1405,58 +1394,27 @@
       }
     }
 
-    function updateProfileClaimState() {
-      const playerId = profilePlayerSelect.value;
-      const player = players.find(item => item.id === playerId);
-      const claimButton = document.getElementById("claimProfile");
-      const claimState = document.getElementById("profileClaimState");
-      const feedback = document.getElementById("profileFeedback");
+    function updateProfileForm() {
+      const player = getCurrentPlayer();
+      const state = document.getElementById("profileState");
+      const title = document.getElementById("profileFormTitle");
+      const button = document.getElementById("saveProfile");
 
-      claimButton.style.display = "none";
-      profileEditor.style.display = "none";
-      feedback.textContent = "";
+      document.getElementById("profileEditor").style.display = "block";
 
-      if (!currentSupabaseUser) {
-        claimState.textContent = "Connecting to Supabase…";
-        return;
-      }
-
-      if (!player) {
-        if (currentOwnedPlayerId) {
-          const owned = players.find(item => item.id === currentOwnedPlayerId);
-          claimState.textContent =
-            `This browser owns ${owned?.name || "a player"}'s profile.`;
-        } else {
-          claimState.textContent =
-            "Choose your registered name. You can claim one profile on this browser.";
-        }
-        return;
-      }
-
-      if (player.ownerId === currentSupabaseUser.id) {
-        claimState.textContent =
-          "This is your profile. Your changes and avatar will be saved permanently.";
-        profileEditor.style.display = "block";
+      if (player) {
+        title.textContent = "Edit your profile";
+        state.textContent =
+          `Signed in as ${player.name}. This identity is automatically used throughout the app.`;
+        button.textContent = "Save My Profile";
         fillProfileEditor(player);
-        return;
+      } else {
+        title.textContent = "Create your profile";
+        state.textContent =
+          "Register once on this browser. Your profile will automatically be used for voting, teams, memories, and comments.";
+        button.textContent = "Register My Profile";
+        clearProfileForm();
       }
-
-      if (player.ownerId) {
-        claimState.textContent =
-          "This profile has already been claimed on another browser or device.";
-        return;
-      }
-
-      if (currentOwnedPlayerId) {
-        const owned = players.find(item => item.id === currentOwnedPlayerId);
-        claimState.textContent =
-          `This browser already owns ${owned?.name || "another player"}'s profile.`;
-        return;
-      }
-
-      claimState.textContent =
-        `Claim ${player.name}'s profile only if this is you.`;
-      claimButton.style.display = "block";
     }
 
     function renderTeams() {
@@ -1519,30 +1477,34 @@
     });
 
     document.getElementById("saveVote").addEventListener("click", () => {
-      const id = playerSelect.value;
+      const player = getCurrentPlayer();
       const feedback = document.getElementById("feedback");
 
       if (!confirmedTime) {
         feedback.textContent = "The match time must be confirmed first.";
         return;
       }
-      if (!id) {
-        feedback.textContent = "Choose your name first.";
+
+      if (!player) {
+        feedback.textContent = "Register your player profile first.";
         return;
       }
 
-      const player = players.find(p => p.id === id);
-      const isAvailable = (availabilityVotes[id] || []).includes(confirmedTime);
+      const isAvailable =
+        (availabilityVotes[player.id] || []).includes(confirmedTime);
 
       if (!isAvailable) {
-        feedback.textContent = `${player.name} did not select ${formatTime(confirmedTime)} as available.`;
+        feedback.textContent =
+          `${player.name} did not select ${formatTime(confirmedTime)} as available.`;
         return;
       }
 
       player.status = "playing";
       player.team = selectedTeam;
       renderTeams();
-      feedback.textContent = `${player.name} joined ${selectedTeam === "A" ? "Team A" : "Team B"}.`;
+      feedback.textContent =
+        `${player.name} joined ${selectedTeam === "A" ? teamAName : teamBName}.`;
+
       setTimeout(() => feedback.textContent = "", 3500);
     });
 
@@ -1644,69 +1606,110 @@ ${pageUrl}`;
     });
 
     document.getElementById("postMemory").addEventListener("click", () => {
-      const playerId = memoryName.value;
-      const comment = document.getElementById("memoryComment").value.trim();
+      const player = getCurrentPlayer();
+      const commentText = document.getElementById("memoryComment").value.trim();
       const memoryDateValue = document.getElementById("memoryDate").value;
       const feedback = document.getElementById("memoryFeedback");
 
-      if (!playerId) {
-        feedback.textContent = "Choose your name first.";
+      if (!player) {
+        feedback.textContent = "Register your player profile first.";
         return;
       }
-      if (!selectedMemoryDataUrl && !comment) {
+
+      if (!selectedMemoryDataUrl && !commentText) {
         feedback.textContent = "Add a photo or write a comment.";
         return;
       }
 
-      const player = players.find(p => p.id === playerId);
       const memoryDate = memoryDateValue
-        ? new Date(`${memoryDateValue}T12:00:00+07:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok" })
+        ? new Date(`${memoryDateValue}T12:00:00+07:00`).toLocaleDateString(
+            "en-GB",
+            {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+              timeZone: "Asia/Bangkok"
+            }
+          )
         : "Match day not selected";
+
       const card = document.createElement("article");
       card.className = "memory-card";
+
       const photoStyle = selectedMemoryDataUrl
         ? `background:linear-gradient(transparent, rgba(7,19,15,.82)), url('${selectedMemoryDataUrl}') center/cover;`
         : `background:linear-gradient(135deg, #123e2c, #07130f);`;
+
       card.innerHTML = `
         <div class="memory-photo" style="${photoStyle}">
-          <div><div class="memory-meta" style="color:rgba(255,255,255,.65)">${memoryDate}</div><div class="scoreline">Match memory</div></div>
+          <div>
+            <div class="memory-meta" style="color:rgba(255,255,255,.65)">
+              ${escapeHtml(memoryDate)}
+            </div>
+            <div class="scoreline">Match memory</div>
+          </div>
         </div>
         <div class="memory-content">
           <div class="memory-meta">AIT Football Field</div>
-          <h3>Posted by ${player.name}</h3>
-          <p>${comment || "Shared a new match photo."}</p>
-          <div class="memory-comments"><div class="memory-comment"><strong>${player.name}:</strong> ${comment || "Great Sunday with the group."}</div></div>
-          <div class="comment-form"><select class="commenter-select"></select><div class="comment-row"><input class="comment-input" placeholder="Write a comment..."><button class="comment-button" type="button">Post</button></div></div>
+          <h3>Posted by ${escapeHtml(player.name)}</h3>
+          <p>${escapeHtml(commentText || "Shared a new match photo.")}</p>
+          <div class="memory-comments">
+            <div class="memory-comment">
+              <strong>${escapeHtml(player.name)}:</strong>
+              ${escapeHtml(commentText || "Great Sunday with the group.")}
+            </div>
+          </div>
+          <div class="comment-form">
+            <div class="comment-as">
+              Commenting as
+              <strong class="commentIdentityName">${escapeHtml(player.name)}</strong>
+            </div>
+            <div class="comment-row">
+              <input class="comment-input" placeholder="Write a comment...">
+              <button class="comment-button" type="button">Post</button>
+            </div>
+          </div>
         </div>`;
-      document.getElementById("memoryList").prepend(card);
-      populateCommenterSelects(card);
 
+      document.getElementById("memoryList").prepend(card);
       document.getElementById("memoryComment").value = "";
       document.getElementById("memoryPhoto").value = "";
       document.getElementById("memoryPreview").hidden = true;
       selectedMemoryDataUrl = "";
       feedback.textContent = "Memory added on this device.";
+      updateAutomaticIdentityUI();
     });
 
     document.getElementById("memoryList").addEventListener("click", event => {
       const button = event.target.closest(".comment-button");
       if (!button) return;
+
+      const player = getCurrentPlayer();
       const form = button.closest(".comment-form");
-      const select = form.querySelector(".commenter-select");
       const input = form.querySelector(".comment-input");
-      const player = players.find(p => p.id === select.value);
       const value = input.value.trim();
-      if (!player) { input.placeholder = "Choose your name first"; return; }
-      if (!value) { input.placeholder = "Write a comment first"; return; }
+
+      if (!player) {
+        input.placeholder = "Register your profile first";
+        return;
+      }
+
+      if (!value) {
+        input.placeholder = "Write a comment first";
+        return;
+      }
+
       const comment = document.createElement("div");
       comment.className = "memory-comment";
-      comment.innerHTML = `<strong>${player.name}:</strong> ${value.replace(/[<>]/g, "")}`;
+      comment.innerHTML =
+        `<strong>${escapeHtml(player.name)}:</strong> ${escapeHtml(value)}`;
+
       form.previousElementSibling.appendChild(comment);
       input.value = "";
       input.placeholder = "Comment posted on this device";
     });
 
-    populateCommenterSelects();
+    updateAutomaticIdentityUI();
 
     document.getElementById("closeShareModal").addEventListener("click", () => document.getElementById("shareModal").classList.remove("open"));
     document.getElementById("shareModal").addEventListener("click", event => { if (event.target.id === "shareModal") event.currentTarget.classList.remove("open"); });
@@ -1726,16 +1729,8 @@ ${pageUrl}`;
 
 
 
-    const availabilityPlayerSelect = document.getElementById("availabilityPlayerSelect");
     const availabilityOptions = document.getElementById("availabilityOptions");
     let selectedAvailability = new Set();
-
-    players.forEach(player => {
-      const option = document.createElement("option");
-      option.value = player.id;
-      option.textContent = player.name;
-      availabilityPlayerSelect.appendChild(option);
-    });
 
     function formatTime(value) {
       const [hour, minute] = value.split(":").map(Number);
@@ -1746,43 +1741,49 @@ ${pageUrl}`;
 
     function renderAvailabilityOptions() {
       availabilityOptions.innerHTML = timeOptions.map(time => `
-        <button type="button" class="availability-option ${selectedAvailability.has(time) ? "active" : ""}" data-time="${time}">
+        <button
+          type="button"
+          class="availability-option ${selectedAvailability.has(time) ? "active" : ""}"
+          data-time="${time}"
+        >
           <strong>${formatTime(time)}</strong>
           <span>Tap if available</span>
         </button>
       `).join("");
 
       availabilityOptions.querySelectorAll("[data-time]").forEach(button => {
+        button.disabled = !getCurrentPlayer();
         button.addEventListener("click", () => {
           const time = button.dataset.time;
-          if (selectedAvailability.has(time)) selectedAvailability.delete(time);
-          else selectedAvailability.add(time);
+
+          if (selectedAvailability.has(time)) {
+            selectedAvailability.delete(time);
+          } else {
+            selectedAvailability.add(time);
+          }
+
           renderAvailabilityOptions();
         });
       });
     }
 
-    availabilityPlayerSelect.addEventListener("change", () => {
-      const existing = availabilityVotes[availabilityPlayerSelect.value] || [];
-      selectedAvailability = new Set(existing);
-      renderAvailabilityOptions();
-    });
-
     document.getElementById("saveAvailability").addEventListener("click", () => {
-      const playerId = availabilityPlayerSelect.value;
+      const player = getCurrentPlayer();
       const feedback = document.getElementById("availabilityFeedback");
 
-      if (!playerId) {
-        feedback.textContent = "Choose your name first.";
+      if (!player) {
+        feedback.textContent = "Register your player profile first.";
         return;
       }
+
       if (!selectedAvailability.size) {
         feedback.textContent = "Select at least one available time.";
         return;
       }
 
-      availabilityVotes[playerId] = [...selectedAvailability];
-      feedback.textContent = "Your availability has been saved on this device.";
+      availabilityVotes[player.id] = [...selectedAvailability];
+      feedback.textContent =
+        `${player.name}'s availability has been saved on this device.`;
       renderTimeResults();
     });
 
@@ -1878,7 +1879,6 @@ ${pageUrl}`;
     renderAvailabilityOptions();
     renderTimeResults();
 
-    const profilePlayerSelect = document.getElementById("profilePlayerSelect");
     const profileEditor = document.getElementById("profileEditor");
     const profileName = document.getElementById("profileName");
     const profileNumber = document.getElementById("profileNumber");
@@ -1888,61 +1888,6 @@ ${pageUrl}`;
     const profilePreview = document.getElementById("profilePreview");
     const profilePreviewWrap = document.getElementById("profilePreviewWrap");
     let pendingProfileImage = null;
-
-    profilePlayerSelect.addEventListener("change", updateProfileClaimState);
-
-    document.getElementById("claimProfile").addEventListener("click", async () => {
-      const player = players.find(item => item.id === profilePlayerSelect.value);
-      const claimState = document.getElementById("profileClaimState");
-
-      if (!player || !currentSupabaseUser) {
-        claimState.textContent = "Choose your registered profile first.";
-        return;
-      }
-
-      if (currentOwnedPlayerId) {
-        claimState.textContent =
-          "This browser has already claimed a player profile.";
-        return;
-      }
-
-      const claimButton = document.getElementById("claimProfile");
-      claimButton.disabled = true;
-      claimButton.textContent = "Claiming…";
-
-      try {
-        const { data, error } = await window.db
-          .from("players")
-          .update({ owner_id: currentSupabaseUser.id })
-          .eq("id", player.id)
-          .is("owner_id", null)
-          .select(
-            "id, owner_id, name, shirt_number, position, description, image_path"
-          )
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (!data) {
-          claimState.textContent =
-            "This profile was already claimed. Refreshing player information…";
-          await loadRegisteredPlayersFromSupabase();
-          return;
-        }
-
-        player.ownerId = data.owner_id;
-        currentOwnedPlayerId = player.id;
-        renderProfiles();
-        updateProfileClaimState();
-      } catch (error) {
-        console.error("Profile claim failed:", error);
-        claimState.textContent =
-          error.message || "Could not claim this profile.";
-      } finally {
-        claimButton.disabled = false;
-        claimButton.textContent = "Claim My Profile";
-      }
-    });
 
     profileImage.addEventListener("change", () => {
       const file = profileImage.files && profileImage.files[0];
@@ -1975,17 +1920,42 @@ ${pageUrl}`;
       reader.readAsDataURL(file);
     });
 
+    async function uploadProfileAvatar(existingPath = null) {
+      if (!pendingProfileFile) {
+        return {
+          imagePath: existingPath,
+          signedUrl: getCurrentPlayer()?.photo || null
+        };
+      }
+
+      const extension =
+        pendingProfileFile.name.split(".").pop()?.toLowerCase() || "jpg";
+      const imagePath =
+        `${currentSupabaseUser.id}/avatar-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await window.db.storage
+        .from("avatars")
+        .upload(imagePath, pendingProfileFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: pendingProfileFile.type
+        });
+
+      if (uploadError) throw uploadError;
+
+      return {
+        imagePath,
+        signedUrl: await createAvatarSignedUrl(imagePath)
+      };
+    }
+
     document.getElementById("saveProfile").addEventListener("click", async () => {
-      const player = players.find(item => item.id === profilePlayerSelect.value);
       const feedback = document.getElementById("profileFeedback");
       const saveButton = document.getElementById("saveProfile");
+      const existingPlayer = getCurrentPlayer();
 
-      if (
-        !player ||
-        !currentSupabaseUser ||
-        player.ownerId !== currentSupabaseUser.id
-      ) {
-        feedback.textContent = "You can edit only your claimed profile.";
+      if (!currentSupabaseUser) {
+        feedback.textContent = "Supabase is still connecting.";
         return;
       }
 
@@ -2009,74 +1979,111 @@ ${pageUrl}`;
       }
 
       saveButton.disabled = true;
-      saveButton.textContent = "Saving…";
+      saveButton.textContent = existingPlayer ? "Saving…" : "Registering…";
       feedback.textContent = "";
 
       try {
-        let imagePath = player.imagePath || null;
-        let signedAvatarUrl = player.photo || null;
+        const avatar = await uploadProfileAvatar(
+          existingPlayer?.imagePath || null
+        );
 
-        if (pendingProfileFile) {
-          const extension =
-            pendingProfileFile.name.split(".").pop()?.toLowerCase() || "jpg";
-          imagePath =
-            `${currentSupabaseUser.id}/avatar-${Date.now()}.${extension}`;
+        let savedRow;
 
-          const { error: uploadError } = await window.db.storage
-            .from("avatars")
-            .upload(imagePath, pendingProfileFile, {
-              cacheControl: "3600",
-              upsert: false,
-              contentType: pendingProfileFile.type
-            });
+        if (existingPlayer) {
+          const { data, error } = await window.db
+            .from("players")
+            .update({
+              name: newName,
+              shirt_number: number,
+              position: profilePosition.value,
+              description: newDescription,
+              image_path: avatar.imagePath
+            })
+            .eq("id", existingPlayer.id)
+            .eq("owner_id", currentSupabaseUser.id)
+            .select(
+              "id, owner_id, name, shirt_number, position, description, image_path"
+            )
+            .single();
 
-          if (uploadError) throw uploadError;
-          signedAvatarUrl = await createAvatarSignedUrl(imagePath);
+          if (error) throw error;
+          savedRow = data;
+        } else {
+          const { data, error } = await window.db
+            .from("players")
+            .insert({
+              owner_id: currentSupabaseUser.id,
+              name: newName,
+              shirt_number: number,
+              position: profilePosition.value,
+              description: newDescription,
+              image_path: avatar.imagePath
+            })
+            .select(
+              "id, owner_id, name, shirt_number, position, description, image_path"
+            )
+            .single();
+
+          if (error) throw error;
+          savedRow = data;
         }
 
-        const { data, error } = await window.db
-          .from("players")
-          .update({
-            name: newName,
-            shirt_number: number,
-            position: profilePosition.value,
-            description: newDescription,
-            image_path: imagePath
-          })
-          .eq("id", player.id)
-          .eq("owner_id", currentSupabaseUser.id)
-          .select(
-            "id, owner_id, name, shirt_number, position, description, image_path"
-          )
-          .single();
+        let player = existingPlayer;
 
-        if (error) throw error;
-
-        player.name = data.name;
-        player.number = data.shirt_number;
-        player.role = data.position;
-        player.note = data.description;
-        player.imagePath = data.image_path;
-        player.photo = signedAvatarUrl;
+        if (!player) {
+          player = {
+            id: savedRow.id,
+            ownerId: savedRow.owner_id,
+            name: savedRow.name,
+            role: savedRow.position,
+            number: savedRow.shirt_number,
+            note: savedRow.description,
+            imagePath: savedRow.image_path,
+            photo: avatar.signedUrl,
+            team: null,
+            status: "maybe"
+          };
+          players.push(player);
+          currentOwnedPlayerId = player.id;
+        } else {
+          player.ownerId = savedRow.owner_id;
+          player.name = savedRow.name;
+          player.number = savedRow.shirt_number;
+          player.role = savedRow.position;
+          player.note = savedRow.description;
+          player.imagePath = savedRow.image_path;
+          player.photo = avatar.signedUrl || player.photo;
+        }
 
         pendingProfileFile = null;
         pendingProfileImage = null;
 
-        repopulateAllPlayerSelects();
-        profilePlayerSelect.value = player.id;
-        renderTeams();
         renderProfiles();
-        updateProfileClaimState();
+        renderTeams();
+        updateProfileForm();
+        updateAutomaticIdentityUI();
 
-        feedback.textContent =
-          "Your profile and avatar were saved permanently.";
+        feedback.textContent = existingPlayer
+          ? "Your profile was updated permanently."
+          : "Your profile was registered. The app will now use your name automatically.";
       } catch (error) {
         console.error("Profile save failed:", error);
-        feedback.textContent =
-          error.message || "Could not save your profile.";
+
+        if (
+          error.code === "23505" ||
+          String(error.message || "").includes("players_owner_id_key")
+        ) {
+          feedback.textContent =
+            "This browser already has a player profile. Refresh the page.";
+        } else {
+          feedback.textContent =
+            error.message || "Could not save your profile.";
+        }
       } finally {
         saveButton.disabled = false;
-        saveButton.textContent = "Save My Profile";
+        saveButton.textContent = getCurrentPlayer()
+          ? "Save My Profile"
+          : "Register My Profile";
       }
     });
 
@@ -2091,7 +2098,7 @@ ${pageUrl}`;
       console.error("Could not load registered players:", error);
       document.getElementById("profileConnectionStatus").textContent =
         "Connection failed";
-      document.getElementById("profileClaimState").textContent =
+      document.getElementById("profileState").textContent =
         error.message || "Could not connect to Supabase.";
     });
   </script>
