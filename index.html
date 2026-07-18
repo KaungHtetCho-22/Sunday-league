@@ -1205,7 +1205,8 @@
       </div>
     </div>
   </div>
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-client.js"></script>
   <script>
     const players = [
       { id: "kaung", name: "Kaung", role: "Midfielder", number: 10, note: "Creates chances and debates formations.", photo: null, team: "A", status: "playing" },
@@ -1798,6 +1799,19 @@ ${pageUrl}`;
     document.getElementById("joinConfirmedCard").style.display = confirmedTime ? "block" : "none";
     document.getElementById("teamsCard").style.display = confirmedTime ? "block" : "none";
     setInterval(updateCountdown, 1000);
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const players = await window.testSupabaseConnection();
+
+        console.log(
+          `Connected successfully. Loaded ${players.length} players.`
+        );
+      } catch (error) {
+        console.error("Supabase setup error:", error);
+      }
+    });
+
   </script>
 </body>
 </html>
