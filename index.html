@@ -101,11 +101,18 @@
       display: grid;
       place-items: center;
       border-radius: 15px;
-      color: var(--ink);
       background: var(--lime);
-      font-size: 1.35rem;
       transform: rotate(-4deg);
       box-shadow: 0 8px 22px rgba(202,255,53,.18);
+      overflow: hidden;
+      padding: 4px;
+    }
+
+    .mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
 
     .brand small {
@@ -1305,7 +1312,7 @@
     <header class="top">
       <div class="topbar">
         <div class="brand">
-          <div class="mark">⚽</div>
+          <div class="mark"><img src="./logo-mark.png" alt="Sunday League logo" /></div>
           <div>Sunday League<small>AIT</small></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -1321,7 +1328,7 @@
 
       <div class="hero-copy">
         <div class="private-badge">🔒 Friends only</div>
-        <h1 id="heroTitle">AIT Days. Two teams.</h1>
+        <h1 id="heroTitle">AIT Sundays. One field. Two teams.</h1>
         <p id="heroDescription">Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board.</p>
       </div>
     </header>
@@ -5301,7 +5308,7 @@ ${pageUrl}`;
     function updateHeroForScreen(screenId) {
       const copy = {
         homeScreen: {
-          title: "AIT Days. Two teams.",
+          title: "AIT Sundays. One field. Two teams.",
           description:
             "Create the match, join the squad, choose your arrival time, and meet at the AIT field."
         },
