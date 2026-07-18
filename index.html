@@ -869,6 +869,64 @@
       background: #fafbf7;
     }
 
+    .create-time-choices {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fafbf7;
+    }
+
+    .create-time-choice {
+      min-height: 48px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      color: var(--ink);
+      background: #fff;
+      font-size: .72rem;
+      font-weight: 900;
+      white-space: nowrap;
+      transition: .18s ease;
+    }
+
+    .create-time-choice.active {
+      border-color: var(--green);
+      background: #eff8f1;
+      box-shadow: 0 0 0 3px rgba(24,104,71,.08);
+    }
+
+    .create-time-check {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: transparent;
+      background: #fff;
+      font-size: .7rem;
+      font-weight: 900;
+    }
+
+    .create-time-choice.active .create-time-check {
+      color: #fff;
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    @media (max-width: 370px) {
+      .create-time-choices {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     .time-slot-pill {
       min-height: 42px;
       padding: 8px 10px 8px 12px;
@@ -1248,7 +1306,7 @@
       <div class="topbar">
         <div class="brand">
           <div class="mark">⚽</div>
-          <div>Sunday League<small>Private friends group</small></div>
+          <div>Sunday League<small>AIT</small></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span
@@ -1263,7 +1321,7 @@
 
       <div class="hero-copy">
         <div class="private-badge">🔒 Friends only</div>
-        <h1 id="heroTitle">Our Sunday. Our teams.</h1>
+        <h1 id="heroTitle">AIT Days. Two teams.</h1>
         <p id="heroDescription">Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board.</p>
       </div>
     </header>
@@ -1569,14 +1627,31 @@
           </div>
 
           <div class="field">
-            <label for="newTimeInput">Time options</label>
-            <div class="time-add-row">
-              <input id="newTimeInput" type="time" step="300" />
-              <button class="secondary compact-button" id="addTimeOption" type="button">Add time</button>
+            <label>Time options</label>
+            <div class="create-time-choices" id="createTimeSlots" aria-label="Choose time options">
+              <button class="create-time-choice active" type="button" data-create-time="17:00" aria-pressed="true">
+                <span class="create-time-check">✓</span>
+                <span>5:00 PM</span>
+              </button>
+              <button class="create-time-choice active" type="button" data-create-time="17:15" aria-pressed="true">
+                <span class="create-time-check">✓</span>
+                <span>5:15 PM</span>
+              </button>
+              <button class="create-time-choice active" type="button" data-create-time="17:30" aria-pressed="true">
+                <span class="create-time-check">✓</span>
+                <span>5:30 PM</span>
+              </button>
+              <button class="create-time-choice active" type="button" data-create-time="17:45" aria-pressed="true">
+                <span class="create-time-check">✓</span>
+                <span>5:45 PM</span>
+              </button>
+              <button class="create-time-choice active" type="button" data-create-time="18:00" aria-pressed="true">
+                <span class="create-time-check">✓</span>
+                <span>6:00 PM</span>
+              </button>
             </div>
-            <div class="time-slot-picker" id="createTimeSlots" aria-label="Selected time options"></div>
-            <input id="newTimes" type="hidden" value="" />
-            <div class="field-help">5:00–6:00 PM is added by default. Use Add time for another option, or tap × to remove one.</div>
+            <input id="newTimes" type="hidden" value="17:00,17:15,17:30,17:45,18:00" />
+            <div class="field-help">Tap a time to select or remove it from the match poll.</div>
           </div>
           <button class="secondary" id="updateMatch">Create availability poll</button>
           <div class="feedback" id="manageFeedback" aria-live="polite"></div>
@@ -3624,56 +3699,40 @@
 
       if (!container) return;
 
-      if (!createTimeOptions.length) {
-        container.innerHTML =
-          `<div class="empty" style="width:100%">No time options added yet</div>`;
-        syncCreateTimeInput();
-        return;
-      }
+      container
+        .querySelectorAll("[data-create-time]")
+        .forEach(button => {
+          const time = button.dataset.createTime;
+          const selected =
+            createTimeOptions.includes(time);
 
-      container.innerHTML = createTimeOptions
-        .map(time => `
-          <span class="time-slot-pill">
-            <span aria-hidden="true">🕒</span>
-            ${formatTime(time)}
-            <button
-              class="time-slot-remove"
-              type="button"
-              data-remove-create-time="${time}"
-              aria-label="Remove ${formatTime(time)}"
-            >×</button>
-          </span>
-        `)
-        .join("");
+          button.classList.toggle("active", selected);
+          button.setAttribute(
+            "aria-pressed",
+            String(selected)
+          );
+        });
 
       syncCreateTimeInput();
     }
 
-    function addCreateTimeOption() {
-      const input =
-        document.getElementById("newTimeInput");
-      const feedback =
-        document.getElementById("manageFeedback");
-      const normalized = normalizeTime(input.value);
+    function toggleCreateTimeOption(time) {
+      if (!time) return;
 
-      if (!normalized) {
-        feedback.textContent =
-          "Choose a valid time first.";
-        return;
+      if (createTimeOptions.includes(time)) {
+        createTimeOptions = createTimeOptions.filter(
+          option => option !== time
+        );
+      } else {
+        createTimeOptions = [
+          ...createTimeOptions,
+          time
+        ].sort();
       }
 
-      if (createTimeOptions.includes(normalized)) {
-        feedback.textContent =
-          `${formatTime(normalized)} is already included.`;
-        return;
-      }
-
-      createTimeOptions = [
-        ...createTimeOptions,
-        normalized
-      ].sort();
-      feedback.textContent = "";
       renderCreateTimeOptions();
+      document.getElementById("manageFeedback")
+        .textContent = "";
     }
 
     function parseTimeOptions(value) {
@@ -3813,8 +3872,7 @@
         feedback.textContent =
           `Match created for ${formatMatchDate(dateValue)}. It now appears in Next created matches for everyone.`;
         createTimeOptions = [];
-        document.getElementById("newTimeInput").value = "";
-        renderCreateTimeOptions();
+          renderCreateTimeOptions();
 
         document
           .querySelector('[data-screen="homeScreen"]')
@@ -5016,32 +5074,16 @@ ${pageUrl}`;
         notifyArrivalAtField
       );
 
-    document.getElementById("addTimeOption")
-      .addEventListener(
-        "click",
-        addCreateTimeOption
-      );
-
-    document.getElementById("newTimeInput")
-      .addEventListener("keydown", event => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          addCreateTimeOption();
-        }
-      });
-
     document.getElementById("createTimeSlots")
       .addEventListener("click", event => {
         const button = event.target.closest(
-          "[data-remove-create-time]"
+          "[data-create-time]"
         );
         if (!button) return;
 
-        createTimeOptions = createTimeOptions.filter(
-          time =>
-            time !== button.dataset.removeCreateTime
+        toggleCreateTimeOption(
+          button.dataset.createTime
         );
-        renderCreateTimeOptions();
       });
 
     document.getElementById("updateMatch")
@@ -5259,9 +5301,9 @@ ${pageUrl}`;
     function updateHeroForScreen(screenId) {
       const copy = {
         homeScreen: {
-          title: "Our Sunday. Our teams.",
+          title: "AIT Sundays. One field. Two teams.",
           description:
-            "Register once, create the match, vote for a time, and pick a side. Every friend sees the same shared match board."
+            "Create the match, join the squad, choose your arrival time, and meet at the AIT field."
         },
         playersScreen: {
           title: "Meet the squad.",
@@ -5326,7 +5368,6 @@ ${pageUrl}`;
         "17:45",
         "18:00"
       ];
-      document.getElementById("newTimeInput").value = "";
       renderCreateTimeOptions();
       updateHeroForScreen("homeScreen");
     }
