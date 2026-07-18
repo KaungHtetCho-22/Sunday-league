@@ -407,6 +407,82 @@
       background: #fafbf7;
     }
 
+    .time-result.unavailable-result {
+      border-color: #efaaa4;
+      background: #fff2f0;
+    }
+
+    .availability-option.unavailable-option {
+      grid-column: 1 / -1;
+    }
+
+    .availability-option.unavailable-option.active {
+      color: #8c342d;
+      border-color: #efaaa4;
+      background: #ffe3e0;
+    }
+
+    .upcoming-match-item {
+      width: 100%;
+      margin-top: 9px;
+      padding: 13px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      color: var(--ink);
+      background: #fafbf7;
+      text-align: left;
+      transition: .2s ease;
+    }
+
+    .upcoming-match-item.active {
+      border-color: var(--green);
+      background: #f3f9f4;
+      box-shadow: 0 0 0 3px rgba(24,104,71,.08);
+    }
+
+    .upcoming-match-item:active {
+      transform: scale(.985);
+    }
+
+    .upcoming-match-main {
+      min-width: 0;
+    }
+
+    .upcoming-match-main strong {
+      display: block;
+      overflow: hidden;
+      font-size: .82rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .upcoming-match-main span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: .64rem;
+      line-height: 1.45;
+    }
+
+    .upcoming-match-status {
+      padding: 6px 8px;
+      border-radius: 999px;
+      color: #385347;
+      background: #eaf0eb;
+      font-size: .59rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .upcoming-match-item.active .upcoming-match-status {
+      color: var(--ink);
+      background: var(--lime);
+    }
+
     .time-result.leading {
       border-color: var(--green);
       box-shadow: 0 0 0 3px rgba(24,104,71,.08);
@@ -1041,7 +1117,7 @@
         <article class="match-card">
           <div class="match-head">
             <div>
-              <div class="overline">Next match</div>
+              <div class="overline" id="matchOverline">Selected match</div>
               <h2 class="match-title" id="matchTitle">Sunday Evening Match</h2>
             </div>
             <div class="status" id="matchStatus">Time voting</div>
@@ -1050,6 +1126,7 @@
           <div class="event-details">
             <div class="detail"><span class="detail-icon">📅</span><span id="fixedDateText">Sunday, 26 July 2026</span></div>
             <div class="detail"><span class="detail-icon">📍</span><span>AIT Football Field</span></div>
+            <div class="detail"><span class="detail-icon">👤</span><span id="matchCreatorText">Created by a registered player</span></div>
             <div class="detail"><span class="detail-icon">🗳️</span><span id="timeStateText">Choose every time you are available</span></div>
           </div>
 
@@ -1077,6 +1154,17 @@
               <div class="mini-stat"><strong id="teamBCount">0</strong><span id="teamBLabel">Team B</span></div>
             </div>
           </div>
+        </article>
+
+        <article class="section-card" id="upcomingMatchesCard">
+          <div class="section-title">
+            <h2>Next created matches</h2>
+            <span id="upcomingMatchCount">0 matches</span>
+          </div>
+          <div class="notice">
+            Any registered player can create a future session. Tap a match below to open its own poll, teams, and arrival board.
+          </div>
+          <div id="upcomingMatchesList"></div>
         </article>
 
         <article class="section-card" id="availabilityCard">
@@ -1314,7 +1402,7 @@
       <section class="screen" id="manageScreen">
         <div class="page-heading">
           <h2>Create next match</h2>
-          <p>Create the match date and available time options. Players will vote before the final time is confirmed.</p>
+          <p>Any registered player can create a future match with its own date and time options. All upcoming matches appear on the shared Match screen.</p>
         </div>
 
         <article class="create-card">
@@ -1355,7 +1443,7 @@
         </article>
 
         <div class="privacy-note">
-          The friend who creates a match becomes its organizer and confirms the final time after at least three players agree.
+          Each match has its own creator, availability poll, confirmed time, teams, planned arrivals, and field check-ins.
         </div>
       </section>
     </main>
@@ -1416,11 +1504,16 @@
     let memoryRefreshTimer = null;
 
     let activeMatch = null;
+    let upcomingMatches = [];
+    let selectedMatchId =
+      sessionStorage.getItem("sundayLeagueSelectedMatchId") || null;
     let activeTimeOptions = [];
     let timeOptions = [];
     let confirmedTime = null;
     let availabilityVotes = {};
+    let availabilityResponses = {};
     let selectedAvailability = new Set();
+    let selectedUnavailable = false;
     let selectedTeam = "A";
     let teamAName = "Team A";
     let teamBName = "Team B";
@@ -1633,6 +1726,7 @@
       renderProfiles();
       updateProfileForm();
       updateAutomaticIdentityUI();
+      renderUpcomingMatches();
 
       if (memoryPosts.length) {
         renderMemories();
@@ -1739,12 +1833,16 @@
       });
 
       const savedPlan = currentPlayer
-        ? arrivalPlans.find(plan => plan.player_id === currentPlayer.id)
+        ? arrivalPlans.find(
+            plan => plan.player_id === currentPlayer.id
+          )
         : null;
 
-      selectedPlannedArrival =
-        normalizeTime(savedPlan?.expected_arrival_time) ||
-        selectedPlannedArrival;
+      selectedPlannedArrival = savedPlan
+        ? savedPlan.availability_status === "unavailable"
+          ? "unavailable"
+          : normalizeTime(savedPlan.expected_arrival_time)
+        : selectedPlannedArrival;
 
       document.getElementById("savePlannedArrival").disabled =
         !hasProfile || activeMatch?.status !== "confirmed";
@@ -1768,12 +1866,15 @@
         selectedAvailability = new Set(
           availabilityVotes[currentPlayer.id] || []
         );
+        selectedUnavailable =
+          availabilityResponses[currentPlayer.id] === "unavailable";
 
         if (currentPlayer.team) {
           selectedTeam = currentPlayer.team;
         }
       } else {
         selectedAvailability = new Set();
+        selectedUnavailable = false;
       }
 
       renderAvailabilityOptions();
@@ -2220,21 +2321,72 @@
       timeOptions = [];
       confirmedTime = null;
       availabilityVotes = {};
+      availabilityResponses = {};
       selectedAvailability = new Set();
+      selectedUnavailable = false;
       arrivals = [];
       arrivalPlans = [];
       selectedPlannedArrival = null;
       teamAName = "Team A";
       teamBName = "Team B";
       resetPlayerMatchState();
+      renderUpcomingMatches();
       updateMatchUI();
+    }
+
+    function renderUpcomingMatches() {
+      const list =
+        document.getElementById("upcomingMatchesList");
+      const count =
+        document.getElementById("upcomingMatchCount");
+
+      if (!list || !count) return;
+
+      count.textContent =
+        `${upcomingMatches.length} ${upcomingMatches.length === 1 ? "match" : "matches"}`;
+
+      if (!upcomingMatches.length) {
+        list.innerHTML =
+          `<div class="empty">No upcoming matches yet</div>`;
+        return;
+      }
+
+      list.innerHTML = upcomingMatches.map(match => {
+        const creator = players.find(
+          player => player.ownerId === match.created_by
+        );
+        const selected = match.id === activeMatch?.id;
+        const statusText =
+          match.status === "confirmed" && match.confirmed_time
+            ? formatTime(match.confirmed_time)
+            : "Time voting";
+
+        return `
+          <button
+            class="upcoming-match-item ${selected ? "active" : ""}"
+            type="button"
+            data-open-match-id="${match.id}"
+          >
+            <div class="upcoming-match-main">
+              <strong>${escapeHtml(match.title)}</strong>
+              <span>
+                ${escapeHtml(formatMatchDate(match.match_date))}
+                · Created by ${escapeHtml(creator?.name || "a registered player")}
+              </span>
+            </div>
+            <span class="upcoming-match-status">
+              ${escapeHtml(statusText)}
+            </span>
+          </button>
+        `;
+      }).join("");
     }
 
     async function loadActiveMatchFromSupabase() {
       currentSupabaseUser = await window.supabaseReady;
       const today = getTodayBangkok();
 
-      const { data: match, error: matchError } = await window.db
+      const { data: matchRows, error: matchError } = await window.db
         .from("matches")
         .select(
           "id, created_by, title, match_date, location, team_a_name, team_b_name, status, confirmed_time, created_at"
@@ -2242,16 +2394,40 @@
         .in("status", ["voting", "confirmed"])
         .gte("match_date", today)
         .order("match_date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .order("created_at", { ascending: true });
 
       if (matchError) throw matchError;
 
-      if (!match) {
+      upcomingMatches = matchRows || [];
+
+      if (!upcomingMatches.length) {
+        selectedMatchId = null;
+        sessionStorage.removeItem(
+          "sundayLeagueSelectedMatchId"
+        );
         setNoActiveMatch();
         return;
       }
+
+      const selectedStillExists = upcomingMatches.some(
+        match => match.id === selectedMatchId
+      );
+
+      if (!selectedStillExists) {
+        selectedMatchId = upcomingMatches[0].id;
+      }
+
+      sessionStorage.setItem(
+        "sundayLeagueSelectedMatchId",
+        selectedMatchId
+      );
+
+      const match = upcomingMatches.find(
+        item => item.id === selectedMatchId
+      ) || upcomingMatches[0];
+
+      activeMatch = match;
+      renderUpcomingMatches();
 
       const { data: optionRows, error: optionError } = await window.db
         .from("match_time_options")
@@ -2270,6 +2446,11 @@
             .in("time_option_id", optionIds)
         : Promise.resolve({ data: [], error: null });
 
+      const availabilityResponsesPromise = window.db
+        .from("match_availability_responses")
+        .select("player_id, response_status, updated_at")
+        .eq("match_id", match.id);
+
       const teamsPromise = window.db
         .from("match_players")
         .select("player_id, team")
@@ -2283,23 +2464,36 @@
 
       const arrivalPlansPromise = window.db
         .from("match_arrival_plans")
-        .select("player_id, expected_arrival_time, updated_at")
+        .select(
+          "player_id, expected_arrival_time, availability_status, updated_at"
+        )
         .eq("match_id", match.id)
-        .order("expected_arrival_time", { ascending: true });
+        .order("expected_arrival_time", {
+          ascending: true,
+          nullsFirst: false
+        });
 
       const [
         { data: voteRows, error: voteError },
+        {
+          data: availabilityResponseRows,
+          error: availabilityResponseError
+        },
         { data: teamRows, error: teamError },
         { data: arrivalRows, error: arrivalError },
         { data: arrivalPlanRows, error: arrivalPlanError }
       ] = await Promise.all([
         votesPromise,
+        availabilityResponsesPromise,
         teamsPromise,
         arrivalsPromise,
         arrivalPlansPromise
       ]);
 
       if (voteError) throw voteError;
+      if (availabilityResponseError) {
+        throw availabilityResponseError;
+      }
       if (teamError) throw teamError;
       if (arrivalError) throw arrivalError;
       if (arrivalPlanError) throw arrivalPlanError;
@@ -2313,6 +2507,12 @@
       teamAName = match.team_a_name || "Team A";
       teamBName = match.team_b_name || "Team B";
       availabilityVotes = {};
+      availabilityResponses = Object.fromEntries(
+        (availabilityResponseRows || []).map(row => [
+          row.player_id,
+          row.response_status
+        ])
+      );
 
       const optionTimeById = Object.fromEntries(
         optionRows.map(option => [
@@ -2321,7 +2521,7 @@
         ])
       );
 
-      voteRows.forEach(vote => {
+      (voteRows || []).forEach(vote => {
         const time = optionTimeById[vote.time_option_id];
         if (!time) return;
 
@@ -2338,15 +2538,19 @@
       arrivals = arrivalRows || [];
       arrivalPlans = arrivalPlanRows || [];
 
-      teamRows.forEach(row => {
-        const player = players.find(item => item.id === row.player_id);
+      (teamRows || []).forEach(row => {
+        const player = players.find(
+          item => item.id === row.player_id
+        );
         if (!player) return;
         player.team = row.team;
         player.status = "playing";
       });
 
       arrivals.forEach(row => {
-        const player = players.find(item => item.id === row.player_id);
+        const player = players.find(
+          item => item.id === row.player_id
+        );
         if (player) player.arrivedAt = row.arrived_at;
       });
 
@@ -2363,12 +2567,24 @@
           ? availabilityVotes[currentPlayer.id] || []
           : []
       );
+      selectedUnavailable =
+        currentPlayer
+          ? availabilityResponses[currentPlayer.id] ===
+            "unavailable"
+          : false;
       selectedTeam = currentPlayer?.team || "A";
-      selectedPlannedArrival = normalizeTime(
-        arrivalPlans.find(
-          plan => plan.player_id === currentPlayer?.id
-        )?.expected_arrival_time
+
+      const currentArrivalPlan = arrivalPlans.find(
+        plan => plan.player_id === currentPlayer?.id
       );
+
+      selectedPlannedArrival =
+        currentArrivalPlan?.availability_status ===
+        "unavailable"
+          ? "unavailable"
+          : normalizeTime(
+              currentArrivalPlan?.expected_arrival_time
+            );
 
       updateMatchUI();
     }
@@ -2376,6 +2592,10 @@
     function updateMatchUI() {
       const matchTitle = document.getElementById("matchTitle");
       const matchStatus = document.getElementById("matchStatus");
+      const matchOverline =
+        document.getElementById("matchOverline");
+      const matchCreatorText =
+        document.getElementById("matchCreatorText");
       const fixedDateText = document.getElementById("fixedDateText");
       const timeStateText = document.getElementById("timeStateText");
       const preConfirmSummary = document.getElementById("preConfirmSummary");
@@ -2387,8 +2607,11 @@
         document.getElementById("plannedArrivalCard");
 
       if (!activeMatch) {
+        matchOverline.textContent = "Selected match";
         matchTitle.textContent = "No upcoming match";
         matchStatus.textContent = "No match";
+        matchCreatorText.textContent =
+          "Created by a registered player";
         fixedDateText.textContent = "Create the next match";
         timeStateText.textContent =
           "Open the Create tab to start a shared availability poll";
@@ -2397,7 +2620,6 @@
         joinConfirmedCard.style.display = "none";
         teamsCard.style.display = "none";
         arrivalCard.style.display = "none";
-        plannedArrivalCard.style.display = "none";
         plannedArrivalCard.style.display = "none";
         arrivalCard.style.display = "none";
 
@@ -2417,8 +2639,19 @@
         return;
       }
 
+      const creator = players.find(
+        player => player.ownerId === activeMatch.created_by
+      );
+
+      matchOverline.textContent =
+        activeMatch.id === upcomingMatches[0]?.id
+          ? "Next match"
+          : "Selected upcoming match";
       matchTitle.textContent = activeMatch.title;
-      fixedDateText.textContent = formatMatchDate(activeMatch.match_date);
+      matchCreatorText.textContent =
+        `Created by ${creator?.name || "a registered player"}`;
+      fixedDateText.textContent =
+        formatMatchDate(activeMatch.match_date);
       document.getElementById("teamALabel").textContent = teamAName;
       document.getElementById("teamBLabel").textContent = teamBName;
       document.getElementById("teamAHeading").textContent = teamAName;
@@ -2448,6 +2681,7 @@
         teamsCard.style.display = "none";
       }
 
+      renderUpcomingMatches();
       renderAvailabilityOptions();
       renderTimeResults();
       renderTeams();
@@ -2460,7 +2694,7 @@
     function renderAvailabilityOptions() {
       if (!activeMatch) {
         availabilityOptions.innerHTML =
-          `<div class="notice" style="grid-column:1/-1">No active match. Create the next match first.</div>`;
+          `<div class="notice" style="grid-column:1/-1">Choose or create an upcoming match first.</div>`;
         return;
       }
 
@@ -2474,7 +2708,7 @@
         Boolean(getCurrentPlayer()) &&
         activeMatch.status === "voting";
 
-      availabilityOptions.innerHTML = timeOptions.map(time => `
+      const timeButtons = timeOptions.map(time => `
         <button
           type="button"
           class="availability-option ${selectedAvailability.has(time) ? "active" : ""}"
@@ -2486,11 +2720,27 @@
         </button>
       `).join("");
 
+      const unavailableButton = `
+        <button
+          type="button"
+          class="availability-option unavailable-option ${selectedUnavailable ? "active" : ""}"
+          data-unavailable="true"
+          ${canEdit ? "" : "disabled"}
+        >
+          <strong>Not available</strong>
+          <span>I cannot attend this match</span>
+        </button>
+      `;
+
+      availabilityOptions.innerHTML =
+        timeButtons + unavailableButton;
+
       availabilityOptions
         .querySelectorAll("[data-time]")
         .forEach(button => {
           button.addEventListener("click", () => {
             const time = button.dataset.time;
+            selectedUnavailable = false;
 
             if (selectedAvailability.has(time)) {
               selectedAvailability.delete(time);
@@ -2501,6 +2751,18 @@
             renderAvailabilityOptions();
           });
         });
+
+      availabilityOptions
+        .querySelector("[data-unavailable]")
+        ?.addEventListener("click", () => {
+          selectedUnavailable = !selectedUnavailable;
+
+          if (selectedUnavailable) {
+            selectedAvailability.clear();
+          }
+
+          renderAvailabilityOptions();
+        });
     }
 
     function renderTimeResults() {
@@ -2509,10 +2771,19 @@
         return;
       }
 
-      const voterIds = Object.keys(availabilityVotes);
+      const respondentIds =
+        Object.keys(availabilityResponses);
+      const availableVoterIds =
+        Object.keys(availabilityVotes);
+      const unavailableIds = respondentIds.filter(
+        playerId =>
+          availabilityResponses[playerId] ===
+          "unavailable"
+      );
+
       const counts = activeTimeOptions.map(option => {
         const time = normalizeTime(option.start_time);
-        const availableIds = voterIds.filter(
+        const availableIds = availableVoterIds.filter(
           playerId =>
             (availabilityVotes[playerId] || []).includes(time)
         );
@@ -2535,7 +2806,7 @@
       );
 
       document.getElementById("voterCount").textContent =
-        voterIds.length;
+        respondentIds.length;
       document.getElementById("leadingTime").textContent =
         leading ? formatTime(leading.time) : "—";
       document.getElementById("leadingVotes").textContent =
@@ -2543,9 +2814,11 @@
 
       const organizer = isCurrentUserOrganizer();
 
-      document.getElementById("timeResults").innerHTML = counts.map(item => {
+      const timeMarkup = counts.map(item => {
         const names = item.availableIds
-          .map(id => players.find(player => player.id === id)?.name)
+          .map(id =>
+            players.find(player => player.id === id)?.name
+          )
           .filter(Boolean);
         const reached =
           item.availableIds.length >= minimumPlayers;
@@ -2563,7 +2836,9 @@
               <span class="time-result-count">${item.availableIds.length} available</span>
             </div>
             <div class="time-result-names">
-              ${names.length ? names.map(escapeHtml).join(", ") : "No players yet"}
+              ${names.length
+                ? names.map(escapeHtml).join(", ")
+                : "No players yet"}
             </div>
             ${canConfirm
               ? `<button type="button" class="confirm-time" data-option-id="${item.optionId}">Confirm ${formatTime(item.time)}</button>`
@@ -2571,6 +2846,29 @@
           </div>
         `;
       }).join("");
+
+      const unavailableNames = unavailableIds
+        .map(id =>
+          players.find(player => player.id === id)?.name
+        )
+        .filter(Boolean);
+
+      const unavailableMarkup = `
+        <div class="time-result unavailable-result">
+          <div class="time-result-head">
+            <strong>Not available</strong>
+            <span class="time-result-count">${unavailableIds.length} players</span>
+          </div>
+          <div class="time-result-names">
+            ${unavailableNames.length
+              ? unavailableNames.map(escapeHtml).join(", ")
+              : "Nobody selected this"}
+          </div>
+        </div>
+      `;
+
+      document.getElementById("timeResults").innerHTML =
+        timeMarkup + unavailableMarkup;
 
       document
         .querySelectorAll("[data-option-id]")
@@ -2584,22 +2882,25 @@
         item => item.availableIds.length >= minimumPlayers
       );
       const notice = document.getElementById("timeNotice");
+      const unavailableText = unavailableIds.length
+        ? ` ${unavailableIds.length} ${unavailableIds.length === 1 ? "player is" : "players are"} not available.`
+        : "";
 
       if (activeMatch.status === "confirmed" && confirmedTime) {
         notice.textContent =
-          `${formatTime(confirmedTime)} is confirmed. Any registered player can now choose a team.`;
+          `${formatTime(confirmedTime)} is confirmed. Any registered player can now choose a team.${unavailableText}`;
       } else if (reachedOptions.length && organizer) {
         notice.textContent =
-          "The minimum has been reached. As match creator, choose the final time above.";
+          `The minimum has been reached. As match creator, choose the final time above.${unavailableText}`;
       } else if (reachedOptions.length) {
         notice.textContent =
-          "The minimum has been reached. Waiting for the match creator to confirm the final time.";
+          `The minimum has been reached. Waiting for the match creator to confirm the final time.${unavailableText}`;
       } else if (organizer) {
         notice.textContent =
-          `You created this match. A time needs at least ${minimumPlayers} players before you can confirm it.`;
+          `You created this match. A time needs at least ${minimumPlayers} players before you can confirm it.${unavailableText}`;
       } else {
         notice.textContent =
-          `No time has reached the minimum of ${minimumPlayers} players yet.`;
+          `No time has reached the minimum of ${minimumPlayers} players yet.${unavailableText}`;
       }
     }
 
@@ -2716,7 +3017,7 @@
       const currentPlayer = getCurrentPlayer();
       const canChoose = Boolean(currentPlayer);
 
-      plannedArrivalOptions.innerHTML = timeOptions.map(time => `
+      const timeButtons = timeOptions.map(time => `
         <button
           type="button"
           class="availability-option ${selectedPlannedArrival === time ? "active" : ""}"
@@ -2728,6 +3029,21 @@
         </button>
       `).join("");
 
+      const unavailableButton = `
+        <button
+          type="button"
+          class="availability-option unavailable-option ${selectedPlannedArrival === "unavailable" ? "active" : ""}"
+          data-planned-arrival-unavailable="true"
+          ${canChoose ? "" : "disabled"}
+        >
+          <strong>Not available</strong>
+          <span>I will not attend this match</span>
+        </button>
+      `;
+
+      plannedArrivalOptions.innerHTML =
+        timeButtons + unavailableButton;
+
       plannedArrivalOptions
         .querySelectorAll("[data-planned-arrival-time]")
         .forEach(button => {
@@ -2736,6 +3052,13 @@
               button.dataset.plannedArrivalTime;
             renderPlannedArrivalOptions();
           });
+        });
+
+      plannedArrivalOptions
+        .querySelector("[data-planned-arrival-unavailable]")
+        ?.addEventListener("click", () => {
+          selectedPlannedArrival = "unavailable";
+          renderPlannedArrivalOptions();
         });
     }
 
@@ -2748,7 +3071,7 @@
 
       if (!activeMatch || activeMatch.status !== "confirmed") {
         list.innerHTML = "";
-        count.textContent = "0 players";
+        count.textContent = "0 responses";
         return;
       }
 
@@ -2760,30 +3083,57 @@
           )
         }))
         .filter(item => item.player)
-        .sort((a, b) =>
-          String(a.expected_arrival_time)
-            .localeCompare(String(b.expected_arrival_time))
-        );
+        .sort((a, b) => {
+          if (
+            a.availability_status === "unavailable" &&
+            b.availability_status !== "unavailable"
+          ) {
+            return 1;
+          }
+
+          if (
+            b.availability_status === "unavailable" &&
+            a.availability_status !== "unavailable"
+          ) {
+            return -1;
+          }
+
+          return String(a.expected_arrival_time || "")
+            .localeCompare(
+              String(b.expected_arrival_time || "")
+            );
+        });
 
       count.textContent =
-        `${visiblePlans.length} ${visiblePlans.length === 1 ? "player" : "players"}`;
+        `${visiblePlans.length} ${visiblePlans.length === 1 ? "response" : "responses"}`;
 
       list.innerHTML = visiblePlans.length
-        ? visiblePlans.map(item => `
-            <div class="planned-arrival-row ${item.player.id === currentPlayer?.id ? "current-user" : ""}">
-              ${item.player.photo
-                ? `<img class="avatar" src="${item.player.photo}" alt="" style="object-fit:cover">`
-                : `<div class="avatar">${initials(item.player.name)}</div>`}
-              <div class="arrival-row-content">
-                <strong>${escapeHtml(item.player.name)}</strong>
-                <span>${item.player.team ? `Joined ${item.player.team === "A" ? teamAName : teamBName}` : "Team not selected yet"}</span>
+        ? visiblePlans.map(item => {
+            const unavailable =
+              item.availability_status === "unavailable";
+
+            return `
+              <div class="planned-arrival-row ${item.player.id === currentPlayer?.id ? "current-user" : ""}">
+                ${item.player.photo
+                  ? `<img class="avatar" src="${item.player.photo}" alt="" style="object-fit:cover">`
+                  : `<div class="avatar">${initials(item.player.name)}</div>`}
+                <div class="arrival-row-content">
+                  <strong>${escapeHtml(item.player.name)}</strong>
+                  <span>${item.player.team
+                    ? `Joined ${item.player.team === "A" ? teamAName : teamBName}`
+                    : unavailable
+                      ? "Will not attend"
+                      : "Team not selected yet"}</span>
+                </div>
+                <span class="planned-arrival-time" style="${unavailable ? "background:#ffe3e0;color:#8c342d" : ""}">
+                  ${unavailable
+                    ? "Not available"
+                    : formatTime(item.expected_arrival_time)}
+                </span>
               </div>
-              <span class="planned-arrival-time">
-                ${formatTime(item.expected_arrival_time)}
-              </span>
-            </div>
-          `).join("")
-        : `<div class="empty">Nobody has shared an arrival time yet</div>`;
+            `;
+          }).join("")
+        : `<div class="empty">Nobody has shared an arrival plan yet</div>`;
     }
 
     async function savePlannedArrivalToSupabase() {
@@ -2810,9 +3160,12 @@
 
       if (!selectedPlannedArrival) {
         feedback.textContent =
-          "Choose when you expect to arrive.";
+          "Choose an arrival time or select Not available.";
         return;
       }
+
+      const unavailable =
+        selectedPlannedArrival === "unavailable";
 
       button.disabled = true;
       button.textContent = "Saving…";
@@ -2826,8 +3179,13 @@
               match_id: activeMatch.id,
               player_id: player.id,
               created_by: currentSupabaseUser.id,
-              expected_arrival_time:
-                selectedPlannedArrival
+              expected_arrival_time: unavailable
+                ? null
+                : selectedPlannedArrival,
+              availability_status: unavailable
+                ? "unavailable"
+                : "coming",
+              updated_at: new Date().toISOString()
             },
             {
               onConflict: "match_id,player_id"
@@ -2838,8 +3196,9 @@
 
         await loadActiveMatchFromSupabase();
 
-        feedback.textContent =
-          `${player.name} plans to arrive at ${formatTime(selectedPlannedArrival)}. Everyone can now see it.`;
+        feedback.textContent = unavailable
+          ? `${player.name} is marked as not available for this match.`
+          : `${player.name} plans to arrive at ${formatTime(selectedPlannedArrival)}. Everyone can now see it.`;
       } catch (error) {
         console.error(
           "Could not save planned arrival:",
@@ -2847,7 +3206,7 @@
         );
         feedback.textContent =
           error.message ||
-          "Could not save your arrival time.";
+          "Could not save your arrival response.";
       } finally {
         button.textContent = "Save my arrival time";
         updateAutomaticIdentityUI();
@@ -3036,12 +3395,23 @@
         return;
       }
 
+      if (
+        !selectedUnavailable &&
+        selectedAvailability.size === 0
+      ) {
+        feedback.textContent =
+          "Choose at least one time or select Not available.";
+        return;
+      }
+
       const allOptionIds = activeTimeOptions.map(
         option => option.id
       );
-      const selectedOptionIds = [...selectedAvailability]
-        .map(time => getActiveOptionByTime(time)?.id)
-        .filter(Boolean);
+      const selectedOptionIds = selectedUnavailable
+        ? []
+        : [...selectedAvailability]
+            .map(time => getActiveOptionByTime(time)?.id)
+            .filter(Boolean);
 
       saveButton.disabled = true;
       saveButton.textContent = "Saving…";
@@ -3072,11 +3442,30 @@
           if (insertError) throw insertError;
         }
 
+        const { error: responseError } = await window.db
+          .from("match_availability_responses")
+          .upsert(
+            {
+              match_id: activeMatch.id,
+              player_id: player.id,
+              created_by: currentSupabaseUser.id,
+              response_status: selectedUnavailable
+                ? "unavailable"
+                : "available",
+              updated_at: new Date().toISOString()
+            },
+            {
+              onConflict: "match_id,player_id"
+            }
+          );
+
+        if (responseError) throw responseError;
+
         await loadActiveMatchFromSupabase();
 
-        feedback.textContent = selectedOptionIds.length
-          ? `${player.name}'s availability is saved for everyone.`
-          : `${player.name}'s availability was cleared.`;
+        feedback.textContent = selectedUnavailable
+          ? `${player.name} is marked as not available for this match.`
+          : `${player.name}'s available times are saved for everyone.`;
       } catch (error) {
         console.error("Could not save availability:", error);
         feedback.textContent =
@@ -3243,10 +3632,17 @@
           throw optionError;
         }
 
+        selectedMatchId = createdMatch.id;
+        sessionStorage.setItem(
+          "sundayLeagueSelectedMatchId",
+          selectedMatchId
+        );
+
         await loadActiveMatchFromSupabase();
+        await loadMemoryMatchesFromSupabase();
 
         feedback.textContent =
-          `Match created for ${formatMatchDate(dateValue)}. The shared poll is now live.`;
+          `Match created for ${formatMatchDate(dateValue)}. It now appears in Next created matches for everyone.`;
 
         document
           .querySelector('[data-screen="homeScreen"]')
@@ -3261,7 +3657,7 @@
             .includes("duplicate")
         ) {
           feedback.textContent =
-            "A match already exists on that date. Choose another date.";
+            "A matching session already exists. Change the title, date, or time options.";
         } else {
           feedback.textContent =
             error.message || "Could not create the match.";
@@ -3379,6 +3775,15 @@ ${pageUrl}`;
             event: "*",
             schema: "public",
             table: "availability_votes"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "match_availability_responses"
           },
           scheduleMatchRefresh
         )
@@ -3842,6 +4247,35 @@ ${pageUrl}`;
       .addEventListener("click", event => {
         if (event.target.id === "shareModal") {
           event.currentTarget.classList.remove("open");
+        }
+      });
+
+    document.getElementById("upcomingMatchesList")
+      .addEventListener("click", async event => {
+        const button =
+          event.target.closest("[data-open-match-id]");
+        if (!button) return;
+
+        selectedMatchId = button.dataset.openMatchId;
+        sessionStorage.setItem(
+          "sundayLeagueSelectedMatchId",
+          selectedMatchId
+        );
+
+        try {
+          await loadActiveMatchFromSupabase();
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+          });
+        } catch (error) {
+          console.error(
+            "Could not open the selected match:",
+            error
+          );
+          document.getElementById("timeNotice").textContent =
+            error.message ||
+            "Could not open this match.";
         }
       });
 
