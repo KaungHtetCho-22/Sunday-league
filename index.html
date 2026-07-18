@@ -591,6 +591,62 @@
     .player-chip small { display: block; color: var(--muted); font-size: .55rem; }
     .empty { padding: 15px 3px; color: var(--muted); font-size: .66rem; text-align: center; }
 
+    .arrival-row {
+      margin-top: 8px;
+      padding: 10px 11px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fafbf7;
+    }
+
+    .arrival-row .avatar {
+      background: var(--blue);
+    }
+
+    .arrival-row-content {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .arrival-row-content strong {
+      display: block;
+      font-size: .74rem;
+    }
+
+    .arrival-row-content span {
+      color: var(--muted);
+      font-size: .61rem;
+      font-weight: 700;
+    }
+
+    .arrival-toast {
+      position: fixed;
+      z-index: 45;
+      left: 50%;
+      bottom: calc(82px + var(--safe-bottom));
+      width: min(calc(100% - 28px), 452px);
+      padding: 13px 15px;
+      border-radius: 16px;
+      color: #fff;
+      background: rgba(7, 19, 15, .94);
+      box-shadow: 0 14px 34px rgba(7, 19, 15, .28);
+      font-size: .75rem;
+      font-weight: 800;
+      text-align: center;
+      transform: translate(-50%, 20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .25s ease;
+    }
+
+    .arrival-toast.show {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
     .notice {
       margin-top: 10px;
       padding: 11px 12px;
@@ -979,13 +1035,13 @@
 
         <article class="section-card" id="joinConfirmedCard" style="display:none">
           <div class="section-title">
-            <h2>Join the confirmed match</h2>
+            <h2>Choose your team</h2>
             <span id="confirmedTimeLabel">Time confirmed</span>
           </div>
 
           <div class="notice identity-notice" id="teamIdentity">
             <strong id="teamIdentityName">Register a player profile first</strong>
-            <span>Your team choice will automatically use your profile.</span>
+            <span>Choose Team A or Team B, then confirm. Your name will appear for everyone.</span>
           </div>
 
           <div class="field">
@@ -1018,6 +1074,24 @@
           </div>
 
           <div class="notice" id="teamNotice">Teams will appear after the match time is confirmed.</div>
+        </article>
+
+        <article class="section-card" id="arrivalCard" style="display:none">
+          <div class="section-title">
+            <h2>Players at the field</h2>
+            <span id="arrivalCount">0 arrived</span>
+          </div>
+
+          <div class="notice identity-notice">
+            <strong id="arrivalIdentityName">Register a player profile first</strong>
+            <span>After choosing a team, tap the button when you reach AIT Football Field.</span>
+          </div>
+
+          <button class="primary" id="arrivedButton" type="button">
+            📍 I’ve Arrived at the Field
+          </button>
+          <div class="feedback" id="arrivalFeedback" aria-live="polite"></div>
+          <div id="arrivalList"></div>
         </article>
       </section>
 
@@ -1183,7 +1257,7 @@
 
           <div class="field">
             <label for="newTimes">Time options</label>
-            <input id="newTimes" value="17:00, 18:00, 19:00, 20:00" />
+            <input id="newTimes" value="17:00, 17:15, 17:30, 17:45, 18:00" />
           </div>
           <button class="secondary" id="updateMatch">Create availability poll</button>
           <div class="feedback" id="manageFeedback" aria-live="polite"></div>
@@ -1194,6 +1268,8 @@
         </div>
       </section>
     </main>
+
+    <div class="arrival-toast" id="arrivalToast" role="status" aria-live="polite"></div>
 
     <nav class="bottom-nav" aria-label="Main navigation">
       <button class="nav-item active" data-screen="homeScreen"><span>⚽</span>Match</button>
@@ -1255,6 +1331,8 @@
     let matchRealtimeChannel = null;
     let matchRefreshTimer = null;
     let fullRefreshTimer = null;
+    let arrivals = [];
+    let arrivalToastTimer = null;
 
     const availabilityOptions = document.getElementById("availabilityOptions");
     const profileEditor = document.getElementById("profileEditor");
@@ -1520,7 +1598,7 @@
         ? currentPlayer.name
         : "register first";
 
-      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName"].forEach(id => {
+      ["availabilityIdentityName", "teamIdentityName", "memoryIdentityName", "arrivalIdentityName"].forEach(id => {
         const element = document.getElementById(id);
         if (element) element.textContent = displayName;
       });
@@ -1554,6 +1632,19 @@
         );
       });
 
+      const arrivedButton = document.getElementById("arrivedButton");
+      const alreadyArrived = Boolean(currentPlayer?.arrivedAt);
+      const canNotifyArrival =
+        hasProfile &&
+        activeMatch?.status === "confirmed" &&
+        Boolean(currentPlayer?.team) &&
+        !alreadyArrived;
+
+      arrivedButton.disabled = !canNotifyArrival;
+      arrivedButton.textContent = alreadyArrived
+        ? "✅ Arrival Notified"
+        : "📍 I’ve Arrived at the Field";
+
       if (currentPlayer) {
         selectedAvailability = new Set(
           availabilityVotes[currentPlayer.id] || []
@@ -1573,6 +1664,7 @@
       players.forEach(player => {
         player.team = null;
         player.status = "maybe";
+        player.arrivedAt = null;
       });
     }
 
@@ -1583,6 +1675,7 @@
       confirmedTime = null;
       availabilityVotes = {};
       selectedAvailability = new Set();
+      arrivals = [];
       teamAName = "Team A";
       teamBName = "Team B";
       resetPlayerMatchState();
@@ -1634,13 +1727,25 @@
         .select("player_id, team")
         .eq("match_id", match.id);
 
+      const arrivalsPromise = window.db
+        .from("match_arrivals")
+        .select("player_id, arrived_at")
+        .eq("match_id", match.id)
+        .order("arrived_at", { ascending: true });
+
       const [
         { data: voteRows, error: voteError },
-        { data: teamRows, error: teamError }
-      ] = await Promise.all([votesPromise, teamsPromise]);
+        { data: teamRows, error: teamError },
+        { data: arrivalRows, error: arrivalError }
+      ] = await Promise.all([
+        votesPromise,
+        teamsPromise,
+        arrivalsPromise
+      ]);
 
       if (voteError) throw voteError;
       if (teamError) throw teamError;
+      if (arrivalError) throw arrivalError;
 
       activeMatch = match;
       activeTimeOptions = optionRows;
@@ -1673,12 +1778,18 @@
       });
 
       resetPlayerMatchState();
+      arrivals = arrivalRows || [];
 
       teamRows.forEach(row => {
         const player = players.find(item => item.id === row.player_id);
         if (!player) return;
         player.team = row.team;
         player.status = "playing";
+      });
+
+      arrivals.forEach(row => {
+        const player = players.find(item => item.id === row.player_id);
+        if (player) player.arrivedAt = row.arrived_at;
       });
 
       if (confirmedTime) {
@@ -1712,6 +1823,7 @@
       const confirmedSummary = document.getElementById("confirmedSummary");
       const joinConfirmedCard = document.getElementById("joinConfirmedCard");
       const teamsCard = document.getElementById("teamsCard");
+      const arrivalCard = document.getElementById("arrivalCard");
 
       if (!activeMatch) {
         matchTitle.textContent = "No upcoming match";
@@ -1723,6 +1835,8 @@
         confirmedSummary.style.display = "none";
         joinConfirmedCard.style.display = "none";
         teamsCard.style.display = "none";
+        arrivalCard.style.display = "none";
+        arrivalCard.style.display = "none";
 
         document.getElementById("voterCount").textContent = "0";
         document.getElementById("leadingTime").textContent = "—";
@@ -1733,6 +1847,7 @@
 
         renderAvailabilityOptions();
         renderTeams();
+        renderArrivals();
         updateCountdown();
         updateAutomaticIdentityUI();
         return;
@@ -1757,6 +1872,7 @@
         confirmedSummary.style.display = "block";
         joinConfirmedCard.style.display = "block";
         teamsCard.style.display = "block";
+        arrivalCard.style.display = "block";
       } else {
         matchStatus.textContent = "Time voting";
         timeStateText.textContent =
@@ -1770,6 +1886,7 @@
       renderAvailabilityOptions();
       renderTimeResults();
       renderTeams();
+      renderArrivals();
       updateCountdown();
       updateAutomaticIdentityUI();
     }
@@ -2021,6 +2138,136 @@
       }
     }
 
+    function formatArrivalTime(timestamp) {
+      if (!timestamp) return "";
+
+      return new Date(timestamp).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Bangkok"
+      });
+    }
+
+    function renderArrivals() {
+      const list = document.getElementById("arrivalList");
+      const count = document.getElementById("arrivalCount");
+
+      if (!activeMatch || activeMatch.status !== "confirmed") {
+        list.innerHTML = "";
+        count.textContent = "0 arrived";
+        return;
+      }
+
+      const visibleArrivals = arrivals
+        .map(arrival => ({
+          ...arrival,
+          player: players.find(
+            player => player.id === arrival.player_id
+          )
+        }))
+        .filter(item => item.player);
+
+      count.textContent =
+        `${visibleArrivals.length} arrived`;
+
+      list.innerHTML = visibleArrivals.length
+        ? visibleArrivals.map(item => `
+            <div class="arrival-row">
+              ${item.player.photo
+                ? `<img class="avatar" src="${item.player.photo}" alt="" style="object-fit:cover">`
+                : `<div class="avatar">${initials(item.player.name)}</div>`}
+              <div class="arrival-row-content">
+                <strong>${escapeHtml(item.player.name)} is at the field</strong>
+                <span>Arrived at ${formatArrivalTime(item.arrived_at)}</span>
+              </div>
+              <span aria-label="Arrived">📍</span>
+            </div>
+          `).join("")
+        : `<div class="empty">Nobody has checked in yet</div>`;
+    }
+
+    function showArrivalToast(message) {
+      const toast = document.getElementById("arrivalToast");
+      toast.textContent = message;
+      toast.classList.add("show");
+
+      clearTimeout(arrivalToastTimer);
+      arrivalToastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+      }, 4500);
+    }
+
+    async function notifyArrivalAtField() {
+      const player = getCurrentPlayer();
+      const feedback =
+        document.getElementById("arrivalFeedback");
+      const button =
+        document.getElementById("arrivedButton");
+
+      if (!player) {
+        feedback.textContent =
+          "Register your player profile first.";
+        return;
+      }
+
+      if (
+        !activeMatch ||
+        activeMatch.status !== "confirmed"
+      ) {
+        feedback.textContent =
+          "The match time must be confirmed first.";
+        return;
+      }
+
+      if (!player.team) {
+        feedback.textContent =
+          "Choose and confirm your team first.";
+        return;
+      }
+
+      if (player.arrivedAt) {
+        feedback.textContent =
+          "Your arrival has already been shared.";
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Notifying everyone…";
+      feedback.textContent = "";
+
+      try {
+        const { error } = await window.db
+          .from("match_arrivals")
+          .upsert(
+            {
+              match_id: activeMatch.id,
+              player_id: player.id,
+              created_by: currentSupabaseUser.id,
+              arrived_at: new Date().toISOString()
+            },
+            {
+              onConflict: "match_id,player_id"
+            }
+          );
+
+        if (error) throw error;
+
+        await loadActiveMatchFromSupabase();
+        feedback.textContent =
+          `${player.name}'s arrival is now visible to everyone.`;
+        showArrivalToast(
+          `📍 ${player.name} has arrived at AIT Football Field`
+        );
+      } catch (error) {
+        console.error("Could not notify arrival:", error);
+        feedback.textContent =
+          error.message || "Could not notify the group.";
+      } finally {
+        updateAutomaticIdentityUI();
+      }
+    }
+
     function updateCountdown() {
       if (!activeMatch || !confirmedTime) {
         ["days", "hours", "minutes", "seconds"].forEach(id => {
@@ -2179,7 +2426,7 @@
         await loadActiveMatchFromSupabase();
 
         feedback.textContent =
-          `${player.name} joined ${selectedTeam === "A" ? teamAName : teamBName}. Everyone can now see the update.`;
+          `${player.name} joined ${selectedTeam === "A" ? teamAName : teamBName}. When you reach the field, tap “I’ve Arrived at the Field.”`;
       } catch (error) {
         console.error("Could not save team choice:", error);
         feedback.textContent =
@@ -2424,6 +2671,35 @@ ${pageUrl}`;
         .on(
           "postgres_changes",
           {
+            event: "INSERT",
+            schema: "public",
+            table: "match_arrivals"
+          },
+          payload => {
+            const player = players.find(
+              item => item.id === payload.new.player_id
+            );
+
+            showArrivalToast(
+              player
+                ? `📍 ${player.name} has arrived at AIT Football Field`
+                : "📍 A player has arrived at AIT Football Field"
+            );
+            scheduleMatchRefresh();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "match_arrivals"
+          },
+          scheduleMatchRefresh
+        )
+        .on(
+          "postgres_changes",
+          {
             event: "*",
             schema: "public",
             table: "players"
@@ -2640,6 +2916,12 @@ ${pageUrl}`;
       .addEventListener(
         "click",
         saveTeamChoiceToSupabase
+      );
+
+    document.getElementById("arrivedButton")
+      .addEventListener(
+        "click",
+        notifyArrivalAtField
       );
 
     document.getElementById("updateMatch")
