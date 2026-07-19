@@ -1509,15 +1509,11 @@
 
           <div id="profileSummaryCard" class="profile-card" style="display:none;margin-top:14px"></div>
 
-          <div class="profile-action-row" id="profileActionRow">
-            <button class="secondary" id="editProfile" type="button" style="display:none">Update Profile</button>
-            <button class="primary" id="saveProfile" type="button">Register My Profile</button>
-          </div>
-
           <div id="profileEditor" style="display:none">
             <div class="field">
               <label for="profileImage">Profile image</label>
               <input id="profileImage" type="file" accept="image/*" />
+              <div class="field-help" id="profileImageStatus">Photo is optional. Selected photos are compressed before upload.</div>
             </div>
 
             <div id="profilePreviewWrap" style="margin-top:12px;display:none">
@@ -1559,6 +1555,11 @@
             </div>
 
             <div class="feedback" id="profileFeedback" aria-live="polite"></div>
+          </div>
+
+          <div class="profile-action-row" id="profileActionRow">
+            <button class="secondary" id="editProfile" type="button" style="display:none">Update Profile</button>
+            <button class="primary" id="saveProfile" type="button">Register Profile & Upload Photo</button>
           </div>
         </article>
 
@@ -1749,6 +1750,7 @@
     let currentSupabaseUser = null;
     let currentOwnedPlayerId = null;
     let isEditingProfile = false;
+    let profileEditorModeKey = null;
     let pendingProfileFile = null;
     let pendingProfileImage = null;
     let selectedMemoryDataUrl = "";
@@ -2019,6 +2021,11 @@
       pendingProfileImage = null;
       profilePreview.removeAttribute("src");
       profilePreviewWrap.style.display = "none";
+      const imageStatus = document.getElementById("profileImageStatus");
+      if (imageStatus) {
+        imageStatus.textContent =
+          "Photo is optional. Selected photos are compressed before upload.";
+      }
     }
 
     function fillProfileEditor(player) {
@@ -2030,12 +2037,22 @@
       pendingProfileFile = null;
       pendingProfileImage = null;
 
+      const imageStatus = document.getElementById("profileImageStatus");
+
       if (player.photo) {
         profilePreview.src = player.photo;
         profilePreviewWrap.style.display = "block";
+        if (imageStatus) {
+          imageStatus.textContent =
+            "Current profile photo. Choose another image to replace it.";
+        }
       } else {
         profilePreview.removeAttribute("src");
         profilePreviewWrap.style.display = "none";
+        if (imageStatus) {
+          imageStatus.textContent =
+            "Photo is optional. Choose an image to add one.";
+        }
       }
     }
 
@@ -2080,28 +2097,40 @@
         renderProfileSummary(player);
 
         if (isEditingProfile) {
+          const modeKey = `edit:${player.id}`;
           profileEditor.style.display = "block";
           document.getElementById("profileSummaryCard").style.display = "none";
-          fillProfileEditor(player);
+
+          if (profileEditorModeKey !== modeKey) {
+            fillProfileEditor(player);
+            profileEditorModeKey = modeKey;
+          }
+
           editButton.style.display = "none";
           saveButton.style.display = "block";
-          saveButton.textContent = "Save Profile";
+          saveButton.textContent = "Save Profile & Photo";
         } else {
           profileEditor.style.display = "none";
           renderProfileSummary(player);
           editButton.style.display = "block";
           saveButton.style.display = "none";
+          profileEditorModeKey = null;
         }
       } else {
         title.textContent = "Create your profile";
         state.textContent =
-          "Register once on this browser. Your identity will then be used automatically throughout the app.";
+          "Complete the form below, then register. Your selected photo will upload with your profile.";
         renderProfileSummary(null);
         profileEditor.style.display = "block";
-        clearProfileForm();
+
+        if (profileEditorModeKey !== "new") {
+          clearProfileForm();
+          profileEditorModeKey = "new";
+        }
+
         editButton.style.display = "none";
         saveButton.style.display = "block";
-        saveButton.textContent = "Register My Profile";
+        saveButton.textContent = "Register Profile & Upload Photo";
       }
     }
 
@@ -4914,8 +4943,14 @@ ${pageUrl}`;
           pendingProfileImage = reader.result;
           profilePreview.src = pendingProfileImage;
           profilePreviewWrap.style.display = "block";
+          const imageStatus =
+            document.getElementById("profileImageStatus");
+          if (imageStatus) {
+            imageStatus.textContent =
+              `Ready to upload: ${pendingProfileFile.name}`;
+          }
           feedback.textContent =
-            "Image ready. Save your profile to upload it.";
+            "Photo is ready. Complete the form and tap the button below.";
         };
         reader.readAsDataURL(pendingProfileFile);
       } catch (error) {
@@ -4925,6 +4960,12 @@ ${pageUrl}`;
         profilePreview.removeAttribute("src");
         profilePreviewWrap.style.display = "none";
         profileImage.value = "";
+        const imageStatus =
+          document.getElementById("profileImageStatus");
+        if (imageStatus) {
+          imageStatus.textContent =
+            "The selected photo could not be prepared.";
+        }
         feedback.textContent =
           error.message || "Could not prepare this image.";
       } finally {
@@ -4983,6 +5024,7 @@ ${pageUrl}`;
     document.getElementById("editProfile")
       .addEventListener("click", () => {
         isEditingProfile = true;
+        profileEditorModeKey = null;
         updateProfileForm();
       });
 
@@ -5032,9 +5074,17 @@ ${pageUrl}`;
         feedback.textContent = "";
 
         try {
+          if (pendingProfileFile) {
+            feedback.textContent = "Uploading profile photo…";
+          } else {
+            feedback.textContent = "Saving profile…";
+          }
+
           const avatar = await uploadProfileAvatar(
             existingPlayer?.imagePath || null
           );
+
+          feedback.textContent = "Saving profile details…";
 
           if (existingPlayer) {
             const { error } = await window.db
@@ -5074,6 +5124,7 @@ ${pageUrl}`;
           await loadMemoriesFromSupabase();
           await updatePushNotificationUI();
           isEditingProfile = false;
+          profileEditorModeKey = null;
           updateProfileForm();
 
           feedback.textContent = existingPlayer
@@ -5089,6 +5140,13 @@ ${pageUrl}`;
           ) {
             feedback.textContent =
               "This browser already has a player profile. Refresh the page.";
+          } else if (
+            String(error.message || "").toLowerCase().includes("row-level security") ||
+            String(error.message || "").toLowerCase().includes("bucket") ||
+            String(error.message || "").toLowerCase().includes("storage")
+          ) {
+            feedback.textContent =
+              `Profile photo upload was blocked by Supabase Storage: ${error.message}`;
           } else {
             feedback.textContent =
               error.message || "Could not save your profile.";
@@ -5096,8 +5154,8 @@ ${pageUrl}`;
         } finally {
           saveButton.disabled = false;
           saveButton.textContent = getCurrentPlayer()
-            ? "Save Profile"
-            : "Register My Profile";
+            ? "Save Profile & Photo"
+            : "Register Profile & Upload Photo";
         }
       });
 
